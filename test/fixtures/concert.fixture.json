@@ -1,0 +1,441 @@
+{
+  "_note": "HAND-MADE FIXTURE for format testing. IDs and scores are invented; this is NOT Qloo data.",
+  "brief": {
+    "adText": "[0:00] Close-up: a needle drops on a record. A warm, psychedelic bassline kicks in.\nVO: Remember when you found a band before everyone else did?\n[0:04] Sunset over Barton Springs. The crowd sways.\nVO: Three days. Forty bands you'll brag about next year. One cold Topo Chico in your hand.\n[0:10] Fast cuts: food trucks, vintage tees, a drummer mid-solo.\nVO: Northline Fest. Zilker Park, Austin. November 14-16.\n[0:14] On screen: Early-bird passes $149. Link in bio.\nVO: Get there before the algorithm does.",
+    "adType": "script",
+    "channel": "reel",
+    "brandLine": "Northline Fest, a fictional indie music festival in Austin",
+    "market": {
+      "country": "US",
+      "region": "Texas",
+      "city": null
+    },
+    "target": {
+      "text": "live-music fans 21-34 in US cities",
+      "ageBuckets": [
+        "24_and_younger",
+        "25_to_29",
+        "30_to_34"
+      ],
+      "gender": null,
+      "interests": [
+        "live music"
+      ],
+      "communities": []
+    },
+    "unused": []
+  },
+  "segments": [
+    {
+      "id": "austin-indie",
+      "name": "Austin indie-music fans, 25-34",
+      "definedBy": [
+        "Austin",
+        "25-34",
+        "indie rock"
+      ],
+      "signals": {
+        "locationQuery": "Austin",
+        "locationId": null,
+        "ageBuckets": [
+          "25_to_29",
+          "30_to_34"
+        ],
+        "gender": null,
+        "audienceIds": [],
+        "tagIds": [],
+        "entityIds": []
+      },
+      "confidence": "normal",
+      "confidenceNote": null,
+      "fingerprint": [
+        {
+          "qlooId": "fake-khruangbin",
+          "name": "Khruangbin",
+          "type": "urn:entity:artist",
+          "affinity": 0.97,
+          "imageUrl": null,
+          "distinctiveness": 2.1
+        },
+        {
+          "qlooId": "fake-black-pumas",
+          "name": "Black Pumas",
+          "type": "urn:entity:artist",
+          "affinity": 0.96,
+          "imageUrl": null,
+          "distinctiveness": 1.9
+        },
+        {
+          "qlooId": "fake-duncan-fellows",
+          "name": "Duncan Fellows",
+          "type": "urn:entity:artist",
+          "affinity": 0.99,
+          "imageUrl": null,
+          "distinctiveness": 2.4
+        },
+        {
+          "qlooId": "fake-waterloo-records",
+          "name": "Waterloo Records",
+          "type": "urn:entity:place",
+          "affinity": 0.93,
+          "imageUrl": null,
+          "distinctiveness": 2.0
+        },
+        {
+          "qlooId": "fake-topo-chico",
+          "name": "Topo Chico",
+          "type": "urn:entity:brand",
+          "affinity": 0.95,
+          "imageUrl": null,
+          "distinctiveness": 1.2
+        },
+        {
+          "qlooId": "fake-song-exploder",
+          "name": "Song Exploder",
+          "type": "urn:entity:podcast",
+          "affinity": 0.9,
+          "imageUrl": null,
+          "distinctiveness": 1.1
+        }
+      ],
+      "themes": [
+        {
+          "qlooId": "fake-tag-psychedelic-soul",
+          "name": "Psychedelic soul",
+          "type": "urn:tag",
+          "affinity": null,
+          "imageUrl": null
+        },
+        {
+          "qlooId": "fake-tag-vinyl-collecting",
+          "name": "Vinyl collecting",
+          "type": "urn:tag",
+          "affinity": null,
+          "imageUrl": null
+        },
+        {
+          "qlooId": "fake-tag-live-music",
+          "name": "Live music",
+          "type": "urn:tag",
+          "affinity": null,
+          "imageUrl": null
+        }
+      ],
+      "setsApart": []
+    },
+    {
+      "id": "nashville-country",
+      "name": "Nashville country fans, 25-34",
+      "definedBy": [
+        "Nashville",
+        "25-34",
+        "country"
+      ],
+      "signals": {
+        "locationQuery": "Nashville",
+        "locationId": null,
+        "ageBuckets": [
+          "25_to_29",
+          "30_to_34"
+        ],
+        "gender": null,
+        "audienceIds": [],
+        "tagIds": [],
+        "entityIds": []
+      },
+      "confidence": "normal",
+      "confidenceNote": null,
+      "fingerprint": [
+        {
+          "qlooId": "fake-morgan-wallen",
+          "name": "Morgan Wallen",
+          "type": "urn:entity:artist",
+          "affinity": 0.96,
+          "imageUrl": null,
+          "distinctiveness": 2.3
+        },
+        {
+          "qlooId": "fake-zach-bryan",
+          "name": "Zach Bryan",
+          "type": "urn:entity:artist",
+          "affinity": 0.95,
+          "imageUrl": null,
+          "distinctiveness": 2.1
+        },
+        {
+          "qlooId": "fake-chris-stapleton",
+          "name": "Chris Stapleton",
+          "type": "urn:entity:artist",
+          "affinity": 0.93,
+          "imageUrl": null,
+          "distinctiveness": 1.8
+        },
+        {
+          "qlooId": "fake-yeti",
+          "name": "Yeti",
+          "type": "urn:entity:brand",
+          "affinity": 0.9,
+          "imageUrl": null,
+          "distinctiveness": 1.4
+        },
+        {
+          "qlooId": "fake-grand-ole-opry",
+          "name": "Grand Ole Opry",
+          "type": "urn:entity:place",
+          "affinity": 0.94,
+          "imageUrl": null,
+          "distinctiveness": 2.0
+        },
+        {
+          "qlooId": "fake-yellowstone",
+          "name": "Yellowstone",
+          "type": "urn:entity:tv_show",
+          "affinity": 0.92,
+          "imageUrl": null,
+          "distinctiveness": 1.7
+        }
+      ],
+      "themes": [
+        {
+          "qlooId": "fake-tag-outdoors",
+          "name": "Outdoors",
+          "type": "urn:tag",
+          "affinity": null,
+          "imageUrl": null
+        },
+        {
+          "qlooId": "fake-tag-southern-rock",
+          "name": "Southern rock",
+          "type": "urn:tag",
+          "affinity": null,
+          "imageUrl": null
+        },
+        {
+          "qlooId": "fake-tag-tailgating",
+          "name": "Tailgating",
+          "type": "urn:tag",
+          "affinity": null,
+          "imageUrl": null
+        }
+      ],
+      "setsApart": []
+    },
+    {
+      "id": "atlanta-hiphop",
+      "name": "Atlanta hip-hop fans, 18-24",
+      "definedBy": [
+        "Atlanta",
+        "24 and younger",
+        "hip-hop"
+      ],
+      "signals": {
+        "locationQuery": "Atlanta",
+        "locationId": null,
+        "ageBuckets": [
+          "24_and_younger"
+        ],
+        "gender": null,
+        "audienceIds": [],
+        "tagIds": [],
+        "entityIds": []
+      },
+      "confidence": "normal",
+      "confidenceNote": null,
+      "fingerprint": [
+        {
+          "qlooId": "fake-future",
+          "name": "Future",
+          "type": "urn:entity:artist",
+          "affinity": 0.97,
+          "imageUrl": null,
+          "distinctiveness": 2.2
+        },
+        {
+          "qlooId": "fake-lil-baby",
+          "name": "Lil Baby",
+          "type": "urn:entity:artist",
+          "affinity": 0.96,
+          "imageUrl": null,
+          "distinctiveness": 2.2
+        },
+        {
+          "qlooId": "fake-metro-boomin",
+          "name": "Metro Boomin",
+          "type": "urn:entity:artist",
+          "affinity": 0.95,
+          "imageUrl": null,
+          "distinctiveness": 2.0
+        },
+        {
+          "qlooId": "fake-jordan-brand",
+          "name": "Jordan Brand",
+          "type": "urn:entity:brand",
+          "affinity": 0.93,
+          "imageUrl": null,
+          "distinctiveness": 1.6
+        },
+        {
+          "qlooId": "fake-lenox-square",
+          "name": "Lenox Square",
+          "type": "urn:entity:place",
+          "affinity": 0.9,
+          "imageUrl": null,
+          "distinctiveness": 1.5
+        },
+        {
+          "qlooId": "fake-drink-champs",
+          "name": "Drink Champs",
+          "type": "urn:entity:podcast",
+          "affinity": 0.88,
+          "imageUrl": null,
+          "distinctiveness": 1.3
+        }
+      ],
+      "themes": [
+        {
+          "qlooId": "fake-tag-trap",
+          "name": "Trap",
+          "type": "urn:tag",
+          "affinity": null,
+          "imageUrl": null
+        },
+        {
+          "qlooId": "fake-tag-sneaker-culture",
+          "name": "Sneaker culture",
+          "type": "urn:tag",
+          "affinity": null,
+          "imageUrl": null
+        }
+      ],
+      "setsApart": []
+    },
+    {
+      "id": "sf-electronic",
+      "name": "San Francisco electronic-music fans, 30-34",
+      "definedBy": [
+        "San Francisco",
+        "30-34",
+        "electronic"
+      ],
+      "signals": {
+        "locationQuery": "San Francisco",
+        "locationId": null,
+        "ageBuckets": [
+          "30_to_34"
+        ],
+        "gender": null,
+        "audienceIds": [],
+        "tagIds": [],
+        "entityIds": []
+      },
+      "confidence": "normal",
+      "confidenceNote": null,
+      "fingerprint": [
+        {
+          "qlooId": "fake-fred-again",
+          "name": "Fred again..",
+          "type": "urn:entity:artist",
+          "affinity": 0.96,
+          "imageUrl": null,
+          "distinctiveness": 2.0
+        },
+        {
+          "qlooId": "fake-odesza",
+          "name": "ODESZA",
+          "type": "urn:entity:artist",
+          "affinity": 0.95,
+          "imageUrl": null,
+          "distinctiveness": 1.9
+        },
+        {
+          "qlooId": "fake-patagonia",
+          "name": "Patagonia",
+          "type": "urn:entity:brand",
+          "affinity": 0.91,
+          "imageUrl": null,
+          "distinctiveness": 1.3
+        },
+        {
+          "qlooId": "fake-dolores-park",
+          "name": "Dolores Park",
+          "type": "urn:entity:place",
+          "affinity": 0.92,
+          "imageUrl": null,
+          "distinctiveness": 1.8
+        },
+        {
+          "qlooId": "fake-lex-fridman-podcast",
+          "name": "Lex Fridman Podcast",
+          "type": "urn:entity:podcast",
+          "affinity": 0.89,
+          "imageUrl": null,
+          "distinctiveness": 1.2
+        },
+        {
+          "qlooId": "fake-silicon-valley",
+          "name": "Silicon Valley",
+          "type": "urn:entity:tv_show",
+          "affinity": 0.88,
+          "imageUrl": null,
+          "distinctiveness": 1.1
+        }
+      ],
+      "themes": [
+        {
+          "qlooId": "fake-tag-electronic",
+          "name": "Electronic",
+          "type": "urn:tag",
+          "affinity": null,
+          "imageUrl": null
+        },
+        {
+          "qlooId": "fake-tag-outdoor-adventure",
+          "name": "Outdoor adventure",
+          "type": "urn:tag",
+          "affinity": null,
+          "imageUrl": null
+        }
+      ],
+      "setsApart": []
+    }
+  ],
+  "references": [
+    {
+      "text": "Topo Chico",
+      "kind": "entity",
+      "qlooId": "fake-topo-chico",
+      "qlooType": "urn:entity:brand",
+      "resolvedName": "Topo Chico",
+      "fitBySegment": {
+        "austin-indie": 0.95,
+        "nashville-country": null,
+        "atlanta-hiphop": null,
+        "sf-electronic": 0.86
+      },
+      "skew": null
+    },
+    {
+      "text": "Barton Springs",
+      "kind": "entity",
+      "qlooId": "fake-barton-springs",
+      "qlooType": "urn:entity:place",
+      "resolvedName": "Barton Springs Pool",
+      "fitBySegment": {
+        "austin-indie": 0.97,
+        "nashville-country": null,
+        "atlanta-hiphop": null,
+        "sf-electronic": null
+      },
+      "skew": null
+    },
+    {
+      "text": "psychedelic bassline",
+      "kind": "theme",
+      "qlooId": null,
+      "qlooType": null,
+      "resolvedName": null,
+      "fitBySegment": {},
+      "skew": null
+    }
+  ]
+}

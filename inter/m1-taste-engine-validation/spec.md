@@ -271,7 +271,7 @@ Base `https://hackathon.api.qloo.com`, header `X-Api-Key: $QLOO_API_KEY`, GET wi
 | Explainability | `feature.explainability=true` on fit calls |
 Signals map: `locationQuery`→`signal.location.query`, `locationId`→`signal.location`, `ageBuckets`→`signal.demographics.age`, `gender`→`signal.demographics.gender`, `audienceIds`→`signal.demographics.audiences`, `tagIds`→`signal.interests.tags`, `entityIds`→`signal.interests.entities`.
 Limits: `take` ≤ 50; rate limits unpublished ("set high"). Terms: never commit Qloo responses; server-side caching is allowed. Keys are deactivated after judging.
-**Unverified until the key arrives:** the affinity field name, whether `filter.results.entities` returns scores for low-affinity items, how theme (tag) fit is best measured, whether audiences work, and rate limits.
+**Verified 2026-10-09:** the affinity field is `query.affinity`; `filter.results.entities` omits items below a segment's cutoff (treated as 0). **Still unverified:** how theme (tag) fit is best measured, whether audiences work, and rate limits.
 
 ### Meta Model API (Muse Spark)
 Researched 2026-10-07 from dev.meta.ai docs (read through a summarising fetch, not raw HTML).

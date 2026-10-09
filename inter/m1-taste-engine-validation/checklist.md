@@ -6,7 +6,7 @@ status: approved
 
 ## Slices
 
-- [ ] **1. Muse judges a hand-made segment, for every arm, into a report**
+- [x] **1. Muse judges a hand-made segment, for every arm, into a report**
   Delivers: the four arms (CrowdCraft, B1, B2, ablation) review an ad for a hand-made segment through Muse, with citation checks, quote-located highlights and ranking scores, written to `run.json` and a readable `report.html`. `selfcheck` proves Muse structured output, the agent tool loop with `finish`, and judge drift.
   Why now: Muse through the AI SDK is the top open issue and needs no Qloo key. It also bootstraps the project and fixes the contracts everything else uses.
   Refs: `prd.md > Review (per segment)`, `prd.md > Baselines`, `prd.md > Run Report (HTML)`, `spec.md > D3: LLM layer and judge model — decided`, `spec.md > D5: Data contracts — decided`, `spec.md > Data Model`, `spec.md > Interfaces`, `spec.md > Meta Model API (Muse Spark)`
@@ -74,3 +74,7 @@ status: approved
 - [ ] `product.md` updated: milestone logged under Shipped, learnings moved into Ideas
 
 ## Revisions
+- 2026-10-09 (slice 1): Qloo key arrived early, so two Qloo checks ran now. **Verified:** the affinity score is `query.affinity`. **Half-holds:** `filter.results.entities` *omits* items below a segment's cutoff rather than scoring them, and returned scores are compressed (≈0.85–0.99). Plan: a missing item counts as "no engagement" (0) and fit is normalised across segments per reference (already how `normFit` works). Slice 3 confirms this at scale.
+- 2026-10-09 (slice 1): Muse 1.3 Contributor through AI SDK v7 works: structured output (`Output.object`), the tool loop ending in `finish`, and drift of 0 on identical input. Latency is about 10–20s per call (reasoning can't be off), so M2's UI must stream progress.
+- 2026-10-09 (slice 1): internal changes. `Trace` and a small `limiter` live in `src/trace.ts` (no `p-limit`); `dotenv` dropped for Node's `--env-file-if-exists`; the judge cites short aliases (F1, T1, S1, R1) that code maps back to Qloo IDs, because models copy UUIDs badly.
+
