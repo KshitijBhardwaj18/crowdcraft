@@ -25,7 +25,8 @@ brief:
     city: null
   target:
     text: K-pop fans 16-24 in the US
-    ageBuckets: null
+    ageBuckets:
+      - 24_and_younger
     gender: null
     interests: []
     communities: []

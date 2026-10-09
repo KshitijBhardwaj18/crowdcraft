@@ -27,7 +27,10 @@ brief:
     city: null
   target:
     text: runners 25-44 in the US
-    ageBuckets: null
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+      - 35_to_44
     gender: null
     interests: []
     communities: []

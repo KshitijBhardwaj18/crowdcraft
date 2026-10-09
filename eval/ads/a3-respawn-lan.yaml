@@ -16,7 +16,9 @@ brief:
     city: null
   target:
     text: gamers 18-29 in the US
-    ageBuckets: null
+    ageBuckets:
+      - 24_and_younger
+      - 25_to_29
     gender: null
     interests: []
     communities: []

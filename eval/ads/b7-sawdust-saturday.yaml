@@ -19,7 +19,10 @@ brief:
     city: null
   target:
     text: adults 30-54 in the US
-    ageBuckets: null
+    ageBuckets:
+      - 30_to_34
+      - 35_to_44
+      - 45_to_54
     gender: null
     interests: []
     communities: []

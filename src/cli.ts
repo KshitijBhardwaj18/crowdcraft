@@ -1,10 +1,13 @@
 // CrowdCraft CLI (spec.md > Interfaces). `npm run cc -- <command>`.
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { tool } from 'ai'
 import { z } from 'zod'
-import { ARMS, Arm, Fixture, Verdict, type Run, type TraceEvent } from './contracts.ts'
+import { ARMS, Arm, Brief, Fixture, Run, Verdict, type TraceEvent } from './contracts.ts'
+import { renderReport } from './report/render.ts'
+import { quota } from './qloo/client.ts'
 import { judge } from './engine/judge.ts'
-import { assembleRun, judgeAll, writeRun } from './engine/run.ts'
+import { assembleRun, buildSegments, judgeAll, writeRun } from './engine/run.ts'
+import YAML from 'yaml'
 import { loadEvalAds, runEval, scoreEval } from './eval/harness.ts'
 import { gradeWithClaude, generateJson, MODEL, runAgent } from './llm.ts'
 import { runProbe } from './probe/probe.ts'
@@ -23,18 +26,40 @@ const progress = (e: TraceEvent) => {
 }
 
 async function cmdRun() {
-  const fixturePath = flag('fixture')
-  if (!fixturePath) throw new Error('Usage: npm run cc -- run --fixture <file.json>  (brief and Qloo runs arrive in later slices)')
   const arms = (flag('arms')?.split(',') ?? ARMS).map((a) => Arm.parse(a))
-  const fx = Fixture.parse(JSON.parse(await readFile(fixturePath, 'utf8')))
   const trace = new Trace()
   trace.log = progress
   const errors: Run['errors'] = []
-  console.log(`Judging ${fx.segments.length} segments × ${arms.length} arms with ${MODEL}…`)
-  const reviews = await judgeAll(fx.brief, fx.segments, fx.references, arms, trace, errors)
-  const run = assembleRun(fx.brief, fx.segments, fx.references, reviews, trace, errors)
+  const fixturePath = flag('fixture')
+  let brief: Brief
+  let segments
+  let references: Fixture['references'] = []
+  if (fixturePath) {
+    const fx = Fixture.parse(JSON.parse(await readFile(fixturePath, 'utf8')))
+    ;({ brief, segments, references } = fx)
+  } else {
+    const file = args[1]
+    if (!file || file.startsWith('--')) throw new Error('Usage: npm run cc -- run <brief.yaml> | run --fixture <file.json>')
+    const doc = YAML.parse(await readFile(file, 'utf8'))
+    brief = Brief.parse(doc.brief ?? doc) // an eval ad file or a plain brief
+    console.log(`Building segments for: ${brief.target.text} (${brief.market.country})`)
+    ;({ segments } = await buildSegments(brief, trace, args.includes('--no-cache')))
+  }
+  console.log(`Judging ${segments.length} segments × ${arms.length} arms with ${MODEL}…`)
+  const reviews = await judgeAll(brief, segments, references, arms, trace, errors)
+  const run = assembleRun(brief, segments, references, reviews, trace, errors)
   const report = await writeRun(run)
-  console.log(`\n${run.verdictLine}\n$${run.usage.costUsd.toFixed(4)} · ${(run.usage.ms / 1000).toFixed(1)}s\nReport: ${report}`)
+  const q = quota.monthRemaining == null ? '' : ` · Qloo quota left ${quota.monthRemaining}`
+  console.log(`\n${run.verdictLine}\n$${run.usage.costUsd.toFixed(4)} · ${run.usage.qlooCalls} Qloo calls${q} · ${(run.usage.ms / 1000).toFixed(1)}s\nReport: ${report}`)
+}
+
+async function cmdReport() {
+  const file = args[1]
+  if (!file) throw new Error('Usage: npm run cc -- report <runs/<id>/run.json>')
+  const run = Run.parse(JSON.parse(await readFile(file, 'utf8')))
+  const out = file.replace(/run\.json$/, 'report.html')
+  await writeFile(out, renderReport(run))
+  console.log(`Report: ${out}`)
 }
 
 async function cmdEval() {
@@ -174,10 +199,10 @@ async function cmdSelfcheck() {
   if (!ok) process.exitCode = 1
 }
 
-const commands: Record<string, () => Promise<void>> = { run: cmdRun, eval: cmdEval, probe: cmdProbe, selfcheck: cmdSelfcheck }
+const commands: Record<string, () => Promise<void>> = { run: cmdRun, report: cmdReport, eval: cmdEval, probe: cmdProbe, selfcheck: cmdSelfcheck }
 const cmd = commands[args[0]]
 if (!cmd) {
-  console.log('Commands: run --fixture <file> [--arms a,b] | eval [--ads ids] [--arms a,b] [--reps n] | eval score <dir> | probe | selfcheck [--qloo]')
+  console.log('Commands: run <brief.yaml> [--no-cache] | run --fixture <file> [--arms a,b] | report <run.json> | eval [--ads ids] [--arms a,b] [--reps n] | eval score <dir> | probe | selfcheck [--qloo]')
   process.exitCode = 1
 } else {
   cmd().catch((e) => {

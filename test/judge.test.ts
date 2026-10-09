@@ -102,3 +102,10 @@ describe('verdictLine', () => {
     expect(line).toBe('Love from B and C; Meh from D; Skip from A')
   })
 })
+
+describe('grade', () => {
+  it('maps ranking scores to letters', async () => {
+    const { grade } = await import('../src/report/render.ts')
+    expect([95, 85, 84, 70, 55, 40, 39].map(grade)).toEqual(['A', 'A', 'B', 'B', 'C', 'D', 'F'])
+  })
+})

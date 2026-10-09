@@ -233,6 +233,7 @@ Evidence for citation validation (CrowdCraft and ablation arms): the segment's `
 | `npm run cc -- eval score <dir>` | That directory with `choice` filled in `blind-pairs.csv` | An updated scorecard |
 | `npm run cc -- probe` | `probe/segments.yaml` | `probe-results/<timestamp>/coverage.json`, `coverage.html` |
 | `npm run cc -- run --fixture <file.json>` (dev) | A hand-made `{ brief, segments, references }` file; skips every Qloo stage | Same as `run` |
+| `npm run cc -- report <runs/<id>/run.json>` (dev) | A finished run | Re-renders `report.html` from `run.json` (no model or Qloo calls) |
 | `npm run cc -- selfcheck [--qloo]` (dev) | Nothing | Checks Muse structured output, the agent tool loop, judge drift and the `claude -p` grader; with `--qloo`, the open Qloo assumptions. Prints ✓/✗ with evidence |
 
 ### LLM layer (`src/llm.ts`)

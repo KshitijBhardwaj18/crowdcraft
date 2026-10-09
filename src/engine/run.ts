@@ -1,10 +1,16 @@
 // Run orchestration (spec.md > Run orchestrator and trace): stages → Run → runs/<id>/run.json + report.html.
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { Run, type Arm, type Brief, type Reference, type Review, type Segment } from '../contracts.ts'
+import { Run, type Arm, type Brief, type Reference, type Review, type Segment, type TraceEvent } from '../contracts.ts'
 import { renderReport } from '../report/render.ts'
 import type { Trace } from '../trace.ts'
+import { newRegistry } from '../qloo/tools.ts'
+import { briefToSignals } from './brief.ts'
+import { stageCache } from './cache.ts'
+import { proposeCandidates } from './candidates.ts'
+import { fingerprint } from './fingerprints.ts'
 import { judge, verdictLine } from './judge.ts'
+import { selectSegments } from './select.ts'
 
 export async function judgeAll(
   brief: Brief,
@@ -70,4 +76,31 @@ function runId(brief: Brief) {
     .replace(/^-|-$/g, '')
     .slice(0, 30)
   return `${stamp}-${slug}`
+}
+
+// Brief → segments (prd.md > Agent Flow steps 1–5). Cached by the brief's market and target, so the same target keeps
+// the same segments across runs (and ad edits) and spends no Qloo calls; the original trace is replayed.
+export async function buildSegments(brief: Brief, trace: Trace, noCache = false): Promise<{ segments: Segment[]; overlap: number }> {
+  const key = { v: 1, market: brief.market, target: brief.target, brandLine: brief.brandLine }
+  const start = trace.events.length
+  const { value, cached } = await stageCache(
+    'segments',
+    key,
+    async () => {
+      const ctx = { trace }
+      const reg = newRegistry()
+      const { signals, understanding } = await briefToSignals(brief, ctx, reg)
+      const cands = await proposeCandidates(brief, signals, understanding, ctx, reg)
+      if (cands.length < 2) throw new Error(`Only ${cands.length} usable candidate segments; try a broader target.`)
+      const fps = await Promise.all(cands.map((c) => fingerprint(c, ctx)))
+      const { segments, overlap } = await selectSegments(fps, ctx, reg)
+      return { segments, overlap, events: trace.events.slice(start) as TraceEvent[] }
+    },
+    noCache,
+  )
+  if (cached) {
+    for (const e of value.events) trace.add(e.stage, e.kind, e.message, e.detail)
+    trace.add('select', 'decision', 'Reused the segments built earlier for this exact target (cached; no Qloo calls)')
+  }
+  return { segments: value.segments, overlap: value.overlap }
 }

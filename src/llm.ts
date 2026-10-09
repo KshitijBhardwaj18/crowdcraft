@@ -60,7 +60,7 @@ export async function generateJson<T>(schema: z.ZodType<T>, o: CallOpts): Promis
 export async function runAgent<T>(
   o: CallOpts & { tools: ToolSet; output: z.ZodType<T>; maxSteps?: number },
 ): Promise<{ result: T; steps: number; finished: boolean }> {
-  const finish = tool({ description: 'Call exactly once, with your final answer, when you are done.', inputSchema: o.output })
+  const finish = tool({ description: 'Call exactly once, with your final answer, when you are done.', inputSchema: o.output, strict: true })
   const r = await gate(() =>
     generateText({
       model: muse(MODEL),
@@ -75,10 +75,18 @@ export async function runAgent<T>(
   )
   meter(o.trace, o.label ?? 'Agent run', r.totalUsage, r.steps.length)
   const call = r.steps.flatMap((s) => s.toolCalls).find((c) => c.toolName === 'finish')
-  if (call) return { result: o.output.parse(call.input), steps: r.steps.length, finished: true }
+  const parsed = call ? o.output.safeParse(call.input) : null
+  if (parsed?.success) return { result: parsed.data, steps: r.steps.length, finished: true }
+  // No finish, or an answer that doesn't fit the contract: one schema-locked call repairs it from the tool results.
+  const transcript = r.steps
+    .flatMap((s) => s.toolResults.filter((t) => t.toolName !== 'finish').map((t) => `${t.toolName}(${JSON.stringify(t.input)}) → ${JSON.stringify(t.output)}`))
+    .join('\n')
+    .slice(-12000)
+  const problem = parsed ? `Your finish answer did not fit the required format: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}\nYour answer was: ${JSON.stringify(call!.input)}` : `You stopped without calling finish. Your last message: ${r.text}`
+  o.trace?.add('judge', 'warning', `${o.label ?? 'Agent run'}: repairing the final answer`, { problem: problem.slice(0, 500) })
   const result = await generateJson(o.output, {
     ...o,
-    prompt: `${o.prompt}\n\nYour work so far:\n${r.text}\n\nReturn your final answer now.`,
+    prompt: `${o.prompt}\n\nTool results so far:\n${transcript}\n\n${problem}\n\nReturn your final answer now, using only IDs from the tool results.`,
     label: `${o.label ?? 'Agent run'} (final answer)`,
   })
   return { result, steps: r.steps.length, finished: false }
