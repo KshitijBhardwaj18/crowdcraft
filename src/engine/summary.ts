@@ -1,5 +1,5 @@
 // "What to do" (spec.md > Summary): the line-by-line tally (code) and one grounded summary call per run.
-import { Summary, type Brief, type Review, type Segment } from '../contracts.ts'
+import { Summary, type Brief, type Review, type Segment, type Targeting } from '../contracts.ts'
 import { generateJson } from '../llm.ts'
 import type { Trace } from '../trace.ts'
 import { locateQuote } from './judge.ts'
@@ -25,17 +25,17 @@ export function lineTally(adText: string, reviews: Review[]): LineTally[] {
   return pieces
 }
 
-const SYSTEM = `You advise a campaign manager who is about to spend money on an ad. You turn simulated audience reactions into decisions.
+const SYSTEM = `You advise a campaign manager who is about to spend money on an ad. You turn simulated audience reactions into concrete changes.
 Rules:
 - Use only the data given: the audiences' reactions, the line-by-line tally and each audience's Qloo taste. Never invent tastes.
-- bottomLine: one plain sentence a busy marketer can act on.
-- actions: 4 to 7, each one specific and short. kind is one of:
-  keep (an element that works, and with whom), fix (what loses whom, and why), try (a concrete change grounded in an audience's taste: name the artists, brands or places),
-  spend (which audiences to put budget on first), skip (which to deprioritise for this cut).
-- segmentIds: the IDs of the audiences each action is about (from the list). quote: the exact line from the ad the action is about, or null.
+- bottomLine: one plain sentence a busy marketer can act on (who to run it for, and the one change that matters most).
+- fixes: 3 to 5. Each: line = the exact line from the ad it changes (or null for something missing), change = the concrete new wording or edit,
+  why = the evidence (which audiences it loses or would win, and the taste signal behind the change), segmentIds = those audiences.
+- keeps: up to 3 lines that already work, with why and segmentIds.
+- skipReasons: one short reason for each audience listed under "Don't target".
 - No generic marketing advice ("A/B test it", "know your audience").`
 
-export async function summarize(brief: Brief, segments: Segment[], reviews: Review[], trace?: Trace): Promise<Summary> {
+export async function summarize(brief: Brief, segments: Segment[], reviews: Review[], targeting: Targeting, trace?: Trace): Promise<Summary> {
   const main = reviews.filter((r) => r.arm === 'crowdcraft')
   const name = (id: string) => segments.find((s) => s.id === id)?.name ?? id
   const audiences = segments
@@ -63,17 +63,19 @@ Audiences:
 ${audiences}
 
 Line by line:
-${lines}`,
+${lines}
+
+Recommended to target: ${targeting.audiences.map((a) => name(a.segmentId)).join(', ') || 'none'}${targeting.weakFit ? ' (weak fit: the ad needs fixing first)' : ''}
+Don't target: ${targeting.skip.map((s) => `[${s.segmentId}] ${name(s.segmentId)}`).join(', ') || 'none'}`,
     trace,
-    label: 'Summarise what to do',
+    label: 'Decide what to fix',
   })
   const valid = new Set(segments.map((s) => s.id))
+  const line = (l: string | null) => (l && locateQuote(brief.adText, l) ? l : null)
   return {
     bottomLine: out.bottomLine,
-    actions: out.actions.map((a) => ({
-      ...a,
-      segmentIds: a.segmentIds.filter((id) => valid.has(id)),
-      quote: a.quote && locateQuote(brief.adText, a.quote) ? a.quote : null,
-    })),
+    fixes: out.fixes.map((f) => ({ ...f, line: line(f.line), segmentIds: f.segmentIds.filter((id) => valid.has(id)) })),
+    keeps: out.keeps.map((k) => ({ ...k, line: line(k.line), segmentIds: k.segmentIds.filter((id) => valid.has(id)) })),
+    skipReasons: out.skipReasons.filter((r) => valid.has(r.segmentId)),
   }
 }

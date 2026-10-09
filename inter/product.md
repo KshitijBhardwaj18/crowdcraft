@@ -27,13 +27,16 @@ Win the hackathon ([qloo.devpost.com](https://qloo.devpost.com/), deadline **Oct
 <!-- inter-build appends a line here when each milestone ships. -->
 
 ## Ideas
+- **Leading M2 candidate (user, 2026-10-09): the live product built around two features.**
+  - *Audience builder ("test on my audience")*: pick regions (country → state → city or neighbourhood, several allowed), age bands, optional gender, and "people who like…" (Qloo search for artists, brands, shows and genres). The ad is tested on exactly those cells, matching Meta and TikTok targeting; audiences can be saved. The engine already takes market, ages and interests, so this is mostly a brief-building UI.
+  - *Discover ("find my best audience")*: from the ad alone, read its references and vibe, ask Qloo which tastes, ages and places over-index on them (demographics, insights seeded with the ad's references, Heatmap), propose the top 3–5 audiences, test them for real and rank them. Needs M1 slice 5 (references resolved in Qloo). Uses the last unused Qloo capability (Heatmap).
 - Product UI (likely M2): the composer, results screens (verdict first, segment cards, line highlights, references, generic vs Qloo, trace), adding and editing segments, one-click examples, the landing page, and deploying live. Build it on M1's engine and run report.
 - Interactive brief: show what was inferred from the user's text as editable fields, and suggest what to add (gender, age, channel and so on) so nothing important is missed.
 - Agent chat view: talk to the agent and it runs everything on the platform (test, craft, discover) using the same Qloo tools.
 - Craft loop: given a goal, the agent rewrites, re-tests and repeats until the target segment lands. Uses Qloo Trending.
 - Audience discovery: work backwards from the ad's references to the Qloo audiences it actually speaks to.
 - Map view: where the ad's taste resonates most, using Qloo **Heatmap** (the last uncovered Qloo capability).
-- Talk to your customer: chat with a persona, upgradable to a live talking avatar, with text as the fallback.
+- **Talk to your audience** (user: "the strongest product"): ask an audience questions and it answers in character from its Qloo taste and its reactions, with sources. Text chat first (about half a day, M2); a real-time talking avatar later (M3), checking Keyframe Labs and alternatives for API, cost and latency. Face risk: an AI-generated face for "Austin · 21–29" would infer race, gender and looks, so use voice-only, a stylised avatar, or a look the marketer picks, framed as "a voice for this audience".
 - Reel generator (stretch): turn the winning script into a short Instagram reel, re-test it, and show the score improving.
 - Image and video ad input (M1 is text only).
 - Several ads per run: 2–3 variants side by side in a variant × segment grid ("which one should I run?"), then bulk testing.

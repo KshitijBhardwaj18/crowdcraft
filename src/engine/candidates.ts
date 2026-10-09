@@ -84,10 +84,10 @@ Propose 6 to 8 cities or metro areas inside this market where people in the targ
 }
 
 // Keep the regions whose taste differs most (top artists and brands for the whole target), then cross with age bands.
-export async function buildCells(brief: Brief, base: QlooSignals, regions: Region[], ctx: Ctx): Promise<Candidate[]> {
+export async function buildCells(brief: Brief, base: QlooSignals, regions: Region[], ctx: Ctx, select = true): Promise<Candidate[]> {
   const bands = ageBands(brief.target.ageBuckets, regions.length <= 1 ? 4 : 2)
   let kept = regions
-  if (regions.length > 1) {
+  if (select && regions.length > 1) {
     const maxRegions = Math.max(2, Math.floor(MAX_CELLS / bands.length))
     const c = { ...ctx, stage: 'candidates' as const }
     const lists = await Promise.all(

@@ -66,21 +66,21 @@ describe('finalize (citation checks)', () => {
 
 describe('scoring', () => {
   const ref = (fit: Record<string, number | null>, qlooId: string | null = 'x'): Reference => ({
-    text: 't', kind: 'entity', qlooId, qlooType: null, resolvedName: null, fitBySegment: fit, skew: null,
+    text: 't', kind: 'entity', qlooId, qlooType: 'urn:entity:artist', resolvedName: null, fitBySegment: fit, skew: null,
   })
 
-  it('normalises fit across segments, treating below-cutoff as 0', () => {
-    const r = ref({ a: 0.9, b: 0.8, c: null })
+  it('scores fit on an absolute scale (0.75 → 0, 1.0 → 100), omitted = 0', () => {
+    const r = ref({ a: 1, b: 0.84, c: 0.83, d: null, e: 0.5 })
     expect(normFit(r, 'a')).toBe(100)
-    expect(normFit(r, 'b')).toBe(89)
-    expect(normFit(r, 'c')).toBe(0)
-    expect(normFit(ref({ a: 0.5, b: 0.5 }), 'a')).toBe(50)
-    expect(normFit(ref({ a: null, b: null }), 'a')).toBe(0)
+    expect(normFit(r, 'b')).toBe(36)
+    expect(normFit(r, 'c')).toBe(32) // nearly identical affinities stay nearly identical
+    expect(normFit(r, 'd')).toBe(0)
+    expect(normFit(r, 'e')).toBe(0)
   })
 
   it('averages resolved references only, and is null without any', () => {
-    const refs = [ref({ a: 1, b: 0 }), ref({ a: 0, b: 1 }), ref({}, null)]
-    expect(segmentRefFit(refs, 'a')).toBe(50)
+    const refs = [ref({ a: 1, b: null }), ref({ a: null, b: 1 }), ref({}, null), ref({ a: null, b: null })]
+    expect(segmentRefFit(refs, 'a')).toBe(50) // the reference nobody scores is a coverage gap and doesn't count
     expect(segmentRefFit([ref({}, null)], 'a')).toBeNull()
   })
 
@@ -122,5 +122,16 @@ describe('lineTally', () => {
     const t = lineTally(ad, reviews)
     expect(t.map((l) => l.text)).toEqual(['Great hook here.', 'Weak middle.', 'Strong close!'])
     expect(t.map((l) => [l.lands, l.loses])).toEqual([[['a'], []], [[], ['a']], [['b'], []]])
+  })
+})
+
+describe('targeting', () => {
+  it('splits budget by fit in 5% steps summing to 100', async () => {
+    const { budgetSplit } = await import('../src/engine/deliverables.ts')
+    const s = budgetSplit([88, 70])
+    expect(s.reduce((a, b) => a + b, 0)).toBe(100)
+    expect(s[0]).toBeGreaterThan(s[1])
+    expect(s.every((x) => x % 5 === 0)).toBe(true)
+    expect(budgetSplit([60])).toEqual([100])
   })
 })

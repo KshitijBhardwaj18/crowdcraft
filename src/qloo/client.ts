@@ -157,3 +157,26 @@ export async function entityDetails(ids: string[], ctx: Ctx): Promise<EvidenceIt
   const d = await qlooGet('/entities', { entity_ids: ids.join(',') }, ctx, `Details for ${ids.length} entities`)
   return (Array.isArray(d.results) ? d.results : []).map(entityItem)
 }
+
+// Heatmap (prd.md > Agent Flow): affinity and popularity per geohash tile (~20–40 km) inside a location.
+export type HeatPoint = { lat: number; lon: number; affinity: number; popularity: number }
+export async function heatmap(seed: { entityIds: string[]; tagIds: string[] }, locationQuery: string, ctx: Ctx): Promise<HeatPoint[]> {
+  const d = await qlooGet(
+    '/v2/insights',
+    {
+      'filter.type': 'urn:heatmap',
+      'signal.interests.entities': seed.entityIds.join(','),
+      'signal.interests.tags': seed.tagIds.join(','),
+      'filter.location.query': locationQuery,
+      take: 50,
+    },
+    { ...ctx, stage: ctx.stage ?? 'candidates' },
+    `Heatmap of where the ad's taste is strongest in ${locationQuery}`,
+  )
+  return (d.results?.heatmap ?? []).map((p: any) => ({
+    lat: p.location.latitude,
+    lon: p.location.longitude,
+    affinity: p.query?.affinity ?? 0,
+    popularity: p.query?.popularity ?? 0,
+  }))
+}

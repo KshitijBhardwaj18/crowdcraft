@@ -68,7 +68,8 @@ Everything is new: the engine, the LLM layer, the Qloo client and cache, the rep
 ### D4b: Segments are region × age cells — decided (2026-10-09, user)
 - Door: one-way (changes what a segment is)
 - Context: the user found taste-tribe segments ("Austin indie-folk fans") unclear for campaign managers, who buy region and age.
-- Chosen: the candidates agent proposes 6–8 taste-diverse regions in the market (verified localities). Code fingerprints each region (artist and brand, at the target's full age range) and keeps the 2–3 most different by top-list overlap (greedy max-min on 1 − Jaccard). Cells = kept regions × 2 age bands split from the target's buckets (a single-city market splits into up to 4 bands). The brief's named interest applies to every cell. The affinity matrix (D4) still runs across the cells, for distinctive items.
+- **Revised 2026-10-09 (slice 5, user): regions come from data.** For a US market, Qloo's heatmap of the ad's resolved references (geohash tiles, popularity-weighted, rolled up to ~50 US metros in `src/engine/heat.ts`) picks the 2 hottest metros plus the coolest big metro as the contrast; the ranking is stored as `Run.heat` and shown on the dashboard. A brief that names a city uses that city (split into up to 4 age bands). The regions agent below is the fallback (no resolvable references, non-US market, or a heatmap error).
+- Original: the candidates agent proposes 6–8 taste-diverse regions in the market (verified localities). Code fingerprints each region (artist and brand, at the target's full age range) and keeps the 2–3 most different by top-list overlap (greedy max-min on 1 − Jaccard). Cells = kept regions × 2 age bands split from the target's buckets (a single-city market splits into up to 4 bands). The brief's named interest applies to every cell. The affinity matrix (D4) still runs across the cells, for distinctive items.
 - Why: results map straight into ad-platform targeting; Qloo taste stays the evidence for every insight.
 - Tradeoff accepted: cells in the same region share more taste than taste tribes did; age differences within a region are smaller.
 - Revisit if: cells come back too similar to discriminate (the eval's distinctness metric).
@@ -142,6 +143,16 @@ The agent that extracts and resolves references, then deterministic fit per segm
 ### Judge (new) — `src/engine/judge.ts`
 Prompts per arm, the `Review` call, B2's two-step invented persona, citation validation, quote location, and the ranking score. Serves PRD **Review (per segment)** and **Baselines**.
 
+### References resolution and fit (revised 2026-10-09, slice 5) — `src/engine/references.ts`
+Extract (one structured call: text, kind, entity type, full search name) → typed Qloo search on both the full name and the ad's words (code) → one structured call picks the matching candidate or none (same place under a longer name and same-brand product lines count; look-alike businesses don't). This replaced the open-ended references agent, which matched look-alikes (a dish tag for Topo Chico, a saloon for Barton Springs). Fit: entities via `filter.results.entities` (omitted = no engagement); themes only when among the audience's top 50 themes. A reference scored for no audience at all is a coverage gap ("no Qloo signal") and never counts. Reference fit uses an absolute scale (affinity 0.75 → 0, 1.0 → 100, omitted → 0) instead of min-max, so near-identical affinities stay near-identical.
+
+### Deliverables (new, 2026-10-09) — `src/engine/deliverables.ts`
+Serves PRD **Deliverables**.
+- **Targeting (code):** recommended = CrowdCraft reviews with Love/Like and ranking score ≥ 55 (top 3; if none qualify, the top 1 flagged "weak fit"); don't target = Meh/Skip or score < 45. Interests = up to 6 names from the audience's distinctive artists, brands and shows plus its genre themes (no places, no sensitive tags), labelled "check availability in your ad manager". Budget split ∝ max(score − 40, 5), rounded to 5% steps summing to 100.
+- **What to fix (one structured call, replaces the action list in Summary):** bottom line, 3–5 fixes (line quote or null, the change, why with evidence, audiences), up to 3 keeps, and a one-line reason per don't-target audience.
+- **Better versions (agentic):** for up to 2 recommended audiences, one rewrite call (keep brand, offer, channel format and length within ±20%; use the audience's taste; list the taste items used), then resolve the new version's references (extract → typed search → pick) and score their fit for that audience only, then judge it with the CrowdCraft arm. Before/after is that audience's ranking score.
+- **Risk:** the judge may favour rewrites built from its own evidence. Slice 6 checks with a generic rewrite (no Qloo data) judged the same way, and with the B1 judge on both rewrites.
+
 ### Summary (new) — `src/engine/summary.ts`
 One structured call after judging: the bottom line and Keep / Fix / Try / Spend / Skip actions from the CrowdCraft reviews, the line-by-line tally and each cell's Qloo taste. Segment IDs are validated and quotes must be found in the ad. Serves PRD **Run Report (HTML)** item 4.
 
@@ -211,6 +222,14 @@ Summary {
   actions: { kind: 'keep'|'fix'|'try'|'spend'|'skip'; text: string; segmentIds: string[]; quote: string|null }[]
 }
 
+Targeting {
+  audiences: { segmentId: string; location: string; age: string; gender: string|null; interests: string[]; budgetPct: number; score: number; verdict: Verdict }[]
+  skip: { segmentId: string; reason: string }[]
+  weakFit: boolean
+}
+Summary (revised) { bottomLine: string; fixes: { line: string|null; change: string; why: string; segmentIds: string[] }[]; keeps: { line: string|null; why: string; segmentIds: string[] }[]; skipReasons: { segmentId: string; reason: string }[] }
+Version { segmentId: string; adText: string; usedTaste: string[]; before: number; review: Review }   // review.rankingScore = after
+
 TraceEvent {
   t: number                       // ms since run start
   stage: 'brief'|'signals'|'candidates'|'fingerprints'|'select'|'references'|'fit'|'judge'|'report'
@@ -224,6 +243,8 @@ Run {
   brief: Brief; segments: Segment[]; references: Reference[]; reviews: Review[]
   verdictLine: string
   summary: Summary|null           // added 2026-10-09: the "What to do" step
+  heat: { label: string; heat: number; role: 'hot'|'cool'|'other' }[]|null   // added 2026-10-09: heatmap ranking
+  targeting: Targeting|null; versions: Version[]   // added 2026-10-09: the deliverables
   trace: TraceEvent[]
   usage: { qlooCalls: number; llmCalls: number; tokensIn: number; tokensOut: number; costUsd: number; ms: number }
   errors: { stage: string; message: string }[]

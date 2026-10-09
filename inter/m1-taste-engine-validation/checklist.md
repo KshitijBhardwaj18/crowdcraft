@@ -33,7 +33,7 @@ status: approved
   Try it: open `probe-results/<timestamp>/coverage.html`.
   Commit: `feat: Qloo client, API assumption checks and coverage probe`
 
-- [ ] **4. A brief becomes real, distinct Qloo segments**
+- [x] **4. A brief becomes real, distinct Qloo segments**
   Delivers: `run` takes a brief, turns it into verified Qloo signals (agent), proposes and broadens candidates (agent), builds fingerprints and the affinity matrix, and keeps the 4–6 most distinct segments with their distinctive items and "what sets them apart". The judge uses them, without references yet.
   Why now: segments are the kernel's foundation, and this is the first real look at it.
   Refs: `prd.md > Brief`, `prd.md > Agent Flow (how Qloo is used)`, `prd.md > Segment`, `spec.md > D2: How agentic the engine is — decided`, `spec.md > D4: Segment building and distinctness — decided`, `spec.md > Qloo agent tools (new) — src/qloo/tools.ts`, `spec.md > Brief stage (new) — src/engine/brief.ts`, `spec.md > Candidates stage (new) — src/engine/candidates.ts`, `spec.md > Fingerprints and selection (new) — src/engine/fingerprints.ts, src/engine/select.ts`, `spec.md > Policy additions`
@@ -42,7 +42,7 @@ status: approved
   Try it: open the report. Do the segments feel like real, different crowds, and is the page pleasant and easy to analyse?
   Commit: `feat: brief to Qloo signals, candidate agent and affinity-matrix segments`
 
-- [ ] **5. The full CrowdCraft review, with the ad's references scored by Qloo**
+- [x] **5. The full CrowdCraft review, with the ad's references scored by Qloo**
   Delivers: references are extracted and resolved (agent), fit is scored per segment with demographic skew, the ranking score uses it, and the report is complete. `run --text` works from free text and asks for missing fields.
   Why now: it completes the kernel. Every PRD report section and run-level acceptance criterion can now be checked.
   Refs: `prd.md > Core Journey`, `prd.md > Review (per segment)`, `prd.md > Run Report (HTML)`, `prd.md > States and Edge Cases`, `spec.md > References stage (new) — src/engine/references.ts`, `spec.md > Run orchestrator and trace (new) — src/engine/run.ts`, `spec.md > Report (new) — src/report/render.ts`
@@ -95,4 +95,10 @@ status: approved
 - 2026-10-09 (slice 4, user feedback): the poster report was unclear ("what was the ad? what do I do?") and taste-tribe names weren't actionable for campaign managers. Agreed: segments become **region × age cells** (spec D4b, PRD Key Decisions), a **"What to do" summary step** per run, and an **app-style dashboard** report (PRD Run Report). Slice 4 stays open until the user is happy with the dashboard.
 - 2026-10-09 (slice 4): region × age cells, the "What to do" summary and the dashboard are built. Concert demo: the agent proposes 8 regions, code keeps the 3 most different (e.g. Austin, LA, Chicago) × under 30 / 30-34; ~76 Qloo calls. Citations: brief's own interest tags are excluded from themes and the judge prefers specific items (20 specific vs 9 theme citations).
 - 2026-10-09 (slice 4): open quality issue for slice 6: with a shared interest tag (e.g. "live music"), cities' top lists overlap more (worst cross-region 53%) than age bands within a city (21%). Verdicts still differ sharply. The segmentation metric now reports cross-region and within-region overlap separately.
+- 2026-10-09 (slice 5): regions are chosen from Qloo's heatmap of the ad's references (2 hottest metros + coolest big metro), replacing the AI's guessed city list. Concert demo: strongest Austin (0.99), San Antonio (0.97); contrast New York (0.60). The heatmap needs `filter.location.query`; the locality boundary option errors on the hackathon API, so tiles are rolled up to a static US metro table; `take` is capped at 50 but doesn't limit tiles.
+- 2026-10-09 (slice 5): **wrong reference matches produced confident wrong verdicts** (the agent matched Topo Chico to a dish tag, Barton Springs to a locality, "a record" to a decor tag; every audience flipped to Meh/Skip). Fixed with extract → typed search → pick-or-none; 5 of 6 concert references now match. Also fixed: min-max fit exaggerated 0.84 vs 0.83 into 100 vs 0 (now an absolute scale), and references no audience scores now count as a coverage gap, not negative.
+- 2026-10-09 (slice 5): result after the fixes: CrowdCraft agrees with generic AI where it's obvious (Austin: Love) and disagrees with evidence where Qloo has it (New York: Meh/Like 32–45 vs generic Like/Love 64–92, because Zilker Park has no engagement there).
+- 2026-10-09 (slice 5): free-text briefs: `run --text` / `--text-file`; missing required fields stop with a list (non-interactive) or are asked for (interactive); ethnicity and income land under "Not used" with reasons; non-English and >5,000-character ads are rejected; <10 words warns. `--same-segments <run.json>` compares an edited ad on an earlier run's audiences.
+- 2026-10-09 (slice 5, user): critique alone wasn't actionable, so every run now ends in three deliverables (scope and PRD updated): **Who to target** (Meta/TikTok-ready location, age, Qloo interests, budget split, don't-target with reasons), **What to fix** (line → change → evidence), **Better versions** (rewrite per recommended audience with their taste, references re-resolved, re-judged). Concert demo: Austin under 30: 70 → 86; San Antonio under 30: 60 → 79. Caveats for the eval: the lift is judged by the same Qloo-grounded judge (check against a generic rewrite and the B1 judge); rewrites can name-drop awkwardly ("Hayes Carll-type finds"); some interest picks are generic (Starbucks).
+- 2026-10-09 (slices 4–5 closed): the user is satisfied enough with the dashboard and deliverables to move on, and asked to start the Next.js app next.
 

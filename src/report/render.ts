@@ -19,9 +19,6 @@ const CHANNEL: Record<string, string> = {
   social: 'Social post', email: 'Email', general: 'General',
 }
 const VERDICT_RANK = { love: 4, like: 3, meh: 2, skip: 1 } as const
-const KIND = {
-  keep: ['Keep', 'k-keep'], fix: ['Fix', 'k-fix'], try: ['Try', 'k-try'], spend: ['Spend', 'k-spend'], skip: ['Skip', 'k-skip'],
-} as const
 const DOMAIN_LABEL: Record<string, string> = { artist: 'Artists', brand: 'Brands', tv_show: 'Shows', place: 'Places', movie: 'Films', podcast: 'Podcasts' }
 const domainOf = (type: string) => type.split(':').pop() ?? type
 
@@ -81,24 +78,52 @@ function scriptPanel(run: Run, lead: Review[], name: (id: string) => string) {
 </section>`
 }
 
-function actionsPanel(run: Run, name: (id: string) => string) {
+// The deliverables (prd.md > Deliverables): who to target, what to fix, better versions. First thing on the page.
+function deliverables(run: Run, name: (id: string) => string) {
+  const t = run.targeting
   const s = run.summary
-  if (!s) return `<section class="panel"><header class="ph"><h2>What to do</h2></header><p class="muted">No summary for this run (needs the Qloo-grounded reviews).</p></section>`
-  const order = ['spend', 'keep', 'fix', 'try', 'skip']
-  return `<section class="panel">
-  <header class="ph"><h2>What to do</h2></header>
-  <p class="bottom-line">${esc(s.bottomLine)}</p>
-  <ul class="actions">${s.actions
-    .slice()
-    .sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind))
+  if (!t && !s) return ''
+  const tags = (ids: string[]) => ids.map((id) => `<a href="#row-${esc(id)}" class="tag" data-open="${esc(id)}">${esc(name(id))}</a>`).join('')
+  const target = t
+    ? `<section class="panel deliv">
+  <header class="ph"><p class="step">1</p><div><h2>Who to target</h2><p class="muted">Paste into Meta or TikTok Ads Manager. Interests come from what Qloo says each audience loves more than the others; check availability in your ad manager.</p></div></header>
+  ${t.weakFit ? '<p class="warnbox">No audience is a strong fit yet. Fix the ad first; this is the least-bad option.</p>' : ''}
+  ${t.audiences
     .map(
-      (a) =>
-        `<li><span class="kind ${KIND[a.kind][1]}">${KIND[a.kind][0]}</span><div><p>${esc(a.text)}</p>${a.quote ? `<p class="q">“${esc(a.quote)}”</p>` : ''}${
-          a.segmentIds.length ? `<p class="tags">${a.segmentIds.map((id) => `<a href="#row-${esc(id)}" class="tag" data-open="${esc(id)}">${esc(name(id))}</a>`).join('')}</p>` : ''
-        }</div></li>`,
+      (a) => `<div class="aud"><div class="aud-h"><b>${esc(a.location)}</b><span class="muted">· ${esc(a.age)}${a.gender ? ` · ${esc(a.gender)}` : ''}</span><span class="spacer"></span>${gradeBadge(a.score)}<span class="budget">${a.budgetPct}% of budget</span></div>
+    <p class="ints">${a.interests.map((i) => `<span class="int">${esc(i)}</span>`).join('') || '<span class="muted">No distinctive interests found</span>'}</p></div>`,
     )
-    .join('')}</ul>
+    .join('')}
+  ${t.skip.length ? `<p class="dk">Don't target</p><ul class="skips">${t.skip.map((x) => `<li><b>${esc(name(x.segmentId))}</b>${x.reason ? `: ${esc(x.reason)}` : ''}</li>`).join('')}</ul>` : ''}
 </section>`
+    : ''
+  const fix = s
+    ? `<section class="panel deliv">
+  <header class="ph"><p class="step">2</p><div><h2>What to fix</h2><p class="muted">Concrete changes, each with the evidence behind it.</p></div></header>
+  <ol class="fixes">${s.fixes
+    .map(
+      (f) => `<li>${f.line ? `<p class="from">“${esc(f.line)}”</p>` : ''}<p class="to">${esc(f.change)}</p><p class="why">${esc(f.why)}</p>${f.segmentIds.length ? `<p class="tags">${tags(f.segmentIds)}</p>` : ''}</li>`,
+    )
+    .join('')}</ol>
+  ${s.keeps.length ? `<p class="dk">Keep</p><ul class="keeps">${s.keeps.map((k) => `<li>${k.line ? `“${esc(k.line)}” · ` : ''}<span class="muted">${esc(k.why)}</span></li>`).join('')}</ul>` : ''}
+</section>`
+    : ''
+  const versions = run.versions.length
+    ? `<section class="panel deliv">
+  <header class="ph"><p class="step">3</p><div><h2>Better versions</h2><p class="muted">The agent rewrote the ad for each recommended audience using their real taste, then re-tested it on that audience.</p></div></header>
+  <div class="versions">${run.versions
+    .map((v) => {
+      const after = v.review.rankingScore
+      const d = after - v.before
+      return `<div class="ver"><div class="aud-h"><b>${esc(name(v.segmentId))}</b><span class="spacer"></span><span class="delta ${d >= 0 ? 'up' : 'down'}">${v.before} → ${after} (${d >= 0 ? '+' : ''}${d})</span></div>
+      <pre class="script">${esc(v.adText)}</pre>
+      ${v.usedTaste.length ? `<p class="ints"><span class="muted small">Uses their taste:</span> ${v.usedTaste.map((u) => `<span class="int">${esc(u)}</span>`).join('')}</p>` : ''}
+      <details class="small"><summary>Their reaction to this version · ${esc(v.review.verdict)} · ${esc(v.review.wouldAct)}</summary><ul class="reaction">${v.review.reaction.map((x) => `<li>${esc(x.sentence)}</li>`).join('')}</ul></details></div>`
+    })
+    .join('')}</div>
+</section>`
+    : ''
+  return `${s ? `<p class="bottom-line big">${esc(s.bottomLine)}</p>` : ''}<div class="two">${target}${fix}</div>${versions}`
 }
 
 function heatmap(run: Run, lead: Review[]) {
@@ -174,6 +199,18 @@ function resultsTable(run: Run, lead: Review[]) {
 </section>`
 }
 
+function heatPanel(run: Run) {
+  if (!run.heat?.length) return ''
+  const max = Math.max(...run.heat.map((h) => h.heat))
+  const min = Math.min(...run.heat.map((h) => h.heat))
+  const w = (x: number) => (max === min ? 100 : 15 + ((x - min) / (max - min)) * 85)
+  const tag = { hot: '<span class="role r-hot">tested · strongest</span>', cool: '<span class="role r-cool">tested · contrast</span>', other: '' }
+  return `<section class="panel"><header class="ph"><h2>Where the ad's taste is strongest</h2><p class="muted">Qloo heatmap of the ad's references, rolled up to US metros and weighted by population. The audiences above were picked from here.</p></header>
+<ol class="heatlist">${run.heat
+    .map((h) => `<li><span class="hl">${esc(h.label)}</span><span class="hb"><span style="width:${w(h.heat)}%" class="${h.role}"></span></span><span class="hv">${h.heat.toFixed(3)}</span>${tag[h.role]}</li>`)
+    .join('')}</ol></section>`
+}
+
 function referencesPanel(run: Run) {
   if (!run.references.length) return ''
   const head = run.segments.map((s) => `<th>${esc(s.name)}</th>`).join('')
@@ -181,12 +218,16 @@ function referencesPanel(run: Run) {
     const cells = run.segments
       .map((s) => {
         const v = r.fitBySegment[s.id]
-        return `<td>${r.qlooId ? (v == null ? '<span class="muted">none</span>' : v.toFixed(2)) : ''}</td>`
+        const gap = Object.values(r.fitBySegment).every((x) => x == null)
+        return `<td>${r.qlooId ? (v == null ? (gap ? '<span class="muted">no Qloo signal</span>' : '<span class="nofit">no engagement</span>') : `<span class="fitv" style="--a:${Math.max(0, (v - 0.8) / 0.2)}">${v.toFixed(2)}</span>`) : ''}</td>`
       })
       .join('')
-    return `<tr><td>“${esc(r.text)}”<br><span class="muted small">${r.qlooId ? `${esc(r.resolvedName)} · ${esc(domainOf(r.qlooType ?? ''))}` : 'not in Qloo'}</span></td>${cells}</tr>`
+    const skew = r.skew
+      ? Object.entries(r.skew.age).sort((x, y) => y[1] - x[1]).slice(0, 1).map(([k, v]) => `skews ${k.replace(/_/g, ' ').replace('24 and younger', 'under 25')} (${v > 0 ? '+' : ''}${v.toFixed(2)})`)[0]
+      : ''
+    return `<tr><td>“${esc(r.text)}”<br><span class="muted small">${r.qlooId ? `${esc(r.resolvedName)} · ${esc(domainOf(r.qlooType ?? ''))}${skew ? ` · ${esc(skew)}` : ''}` : 'not in Qloo'}</span></td>${cells}</tr>`
   })
-  return `<section class="panel"><header class="ph"><h2>References in the ad</h2><p class="muted">How much each audience engages with the brands, places and artists the ad mentions (Qloo affinity)</p></header>
+  return `<section class="panel"><header class="ph"><h2>References in the ad</h2><p class="muted">How much each audience engages with the brands, places and artists the ad mentions (Qloo affinity; “no engagement” means Qloo finds no meaningful affinity)</p></header>
 <div class="scroll"><table><thead><tr><th>Reference</th>${head}</tr></thead><tbody>${rows.join('')}</tbody></table></div></section>`
 }
 
@@ -211,10 +252,12 @@ export function renderReport(run: Run): string {
   ${b.unused.length ? `<p class="muted small">Not used: ${b.unused.map((u) => `${esc(u.phrase)} (${esc(u.reason)})`).join('; ')}</p>` : ''}
 </header>
 ${run.errors.length ? `<div class="errors">${run.errors.map((e) => `<p>⚠ ${esc(e.stage)}: ${esc(e.message)}</p>`).join('')}</div>` : ''}
+${deliverables(run, name)}
+<h2 class="section-h">The evidence</h2>
 ${kpis(run, lead, name)}
-<div class="two">${scriptPanel(run, lead, name)}${actionsPanel(run, name)}</div>
+${scriptPanel(run, lead, name)}
 ${resultsTable(run, lead)}
-${referencesPanel(run)}
+<div class="two">${heatPanel(run) || '<div></div>'}${referencesPanel(run) || '<div></div>'}</div>
 <section class="panel"><details><summary><b>How the agent worked</b> <span class="muted">· ${run.trace.length} steps · ${run.usage.qlooCalls} Qloo calls · ${run.usage.llmCalls} AI calls · $${run.usage.costUsd.toFixed(4)} · ${(run.usage.ms / 1000).toFixed(0)}s</span></summary>
 <ol class="trace">${run.trace
     .map((e) => `<li class="k-${e.kind}"><span class="t">${(e.t / 1000).toFixed(1)}s</span><span class="stage">${esc(e.stage)}</span>${esc(e.message)}</li>`)
@@ -333,4 +376,20 @@ mark{color:inherit;border-radius:3px;padding:1px 2px;cursor:help}mark.lands{back
 .trace .stage{font:500 11px "Geist Mono",monospace;background:var(--soft);border-radius:4px;padding:1px 6px;margin-right:8px}.trace .k-error{color:var(--skip)}.trace .k-decision{font-weight:500}
 details summary{cursor:pointer}
 footer{margin-top:28px;text-align:center}
+.bottom-line.big{font-size:19px;font-weight:600;line-height:1.4;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:12px;padding:14px 18px;margin:0 0 12px;box-shadow:var(--shadow)}
+.deliv .ph{display:flex;gap:12px;align-items:flex-start}.step{margin:0;flex:none;width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px}
+.section-h{margin:28px 0 12px;font-size:13px;font-family:"Geist Mono",monospace;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.aud,.ver{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}.aud-h{display:flex;gap:8px;align-items:center}.aud-h .spacer{flex:1}
+.budget{font:600 12px "Geist Mono",monospace;background:var(--accent-soft);color:var(--accent);border-radius:6px;padding:2px 8px}
+.ints{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 0}.int{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:1px 9px}
+.skips,.keeps{margin:0;padding-left:18px;font-size:13.5px}.skips li,.keeps li{margin:4px 0}
+.warnbox{background:var(--loses);border-radius:8px;padding:8px 12px;margin:0 0 10px;font-size:13.5px}
+.fixes{margin:0;padding-left:20px}.fixes li{margin:0 0 12px}.fixes p{margin:0}.from{color:var(--skip);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--skip) 50%,transparent);font-size:13px}
+.to{font-weight:600;margin-top:2px!important}.why{font-size:12.5px;color:var(--muted);margin-top:2px!important}
+.versions{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px}.ver .script{margin-top:8px}
+.delta{font:600 13px "Geist Mono",monospace;border-radius:6px;padding:2px 8px}.delta.up{background:var(--lands);color:var(--love)}.delta.down{background:var(--loses);color:var(--skip)}
+.heatlist{list-style:none;margin:0;padding:0}.heatlist li{display:grid;grid-template-columns:150px 1fr 48px auto;gap:10px;align-items:center;padding:5px 0;font-size:13.5px}
+.hb{height:8px;background:var(--soft);border-radius:4px;overflow:hidden}.hb span{display:block;height:100%;background:color-mix(in srgb,var(--accent) 45%,transparent)}.hb .hot{background:var(--love)}.hb .cool{background:var(--skip)}
+.hv{font:500 12px "Geist Mono",monospace;color:var(--muted);text-align:right}.role{font-size:11px;border-radius:5px;padding:1px 6px;white-space:nowrap}.r-hot{background:var(--lands);color:var(--love)}.r-cool{background:var(--loses);color:var(--skip)}
+.fitv{display:inline-block;min-width:44px;text-align:center;border-radius:5px;padding:1px 6px;font:500 12px "Geist Mono",monospace;background:color-mix(in srgb,var(--love) calc(var(--a) * 70%),var(--soft))}.nofit{font-size:12px;color:var(--skip)}
 `

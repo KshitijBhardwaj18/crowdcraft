@@ -13,8 +13,8 @@ const SENSITIVE_AUDIENCE_TYPES = ['urn:audience:communities', 'urn:audience:poli
 const SENSITIVE = /\b(queer|trans|transgender|lgbtq?\+?|gay|lesbian|bisexual|drag queens?|christian|catholic|muslim|islamic|jewish|hindu|buddhist|church|religio\w*|latin[ao]s?|latinx|hispanic|african[- ]american|black|asian[- ]american|ethnic\w*|conservative|liberal|republican|democrat\w*|politic\w*)\b/i
 export const isSensitiveTag = (name: string) => SENSITIVE.test(name)
 
-export type ToolRegistry = { ids: Set<string>; names: Map<string, string>; localities: Map<string, string> }
-export const newRegistry = (): ToolRegistry => ({ ids: new Set(), names: new Map(), localities: new Map() })
+export type ToolRegistry = { ids: Set<string>; names: Map<string, string>; types: Map<string, string>; localities: Map<string, string> }
+export const newRegistry = (): ToolRegistry => ({ ids: new Set(), names: new Map(), types: new Map(), localities: new Map() })
 
 const SignalsInput = z.object({
   locationQuery: z.string().nullable().describe('A city, neighbourhood or region name, e.g. "Austin"'),
@@ -26,8 +26,8 @@ const SignalsInput = z.object({
 })
 
 export function qlooTools(ctx: Ctx, reg: ToolRegistry, opts: { allowedCommunities: string[] }) {
-  const remember = <T extends { qlooId: string; name: string }>(xs: T[]) => {
-    for (const x of xs) reg.ids.add(x.qlooId), reg.names.set(x.qlooId, x.name)
+  const remember = <T extends { qlooId: string; name: string; type: string }>(xs: T[]) => {
+    for (const x of xs) reg.ids.add(x.qlooId), reg.names.set(x.qlooId, x.name), reg.types.set(x.qlooId, x.type)
     return xs
   }
   return {

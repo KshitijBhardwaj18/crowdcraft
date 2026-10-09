@@ -12,6 +12,7 @@ import {
   type Segment,
 } from '../contracts.ts'
 import { generateJson } from '../llm.ts'
+import { isScoredEntity } from './references.ts'
 import type { Trace } from '../trace.ts'
 
 export const REF_WEIGHT = 0.4 // spec.md > D6 #5; tuned from the ablation in slice 6
@@ -75,16 +76,23 @@ export function segmentEvidence(seg: Segment, refs: Reference[] | null): Evidenc
     seg.setsApart.forEach((t, i) => add('S', i, t.qlooId, t.name))
   }
   if (refs?.length) {
-    lines.push("How this crowd relates to the ad's own references (0 = no engagement, 100 = the strongest fit among the segments):")
-    // Only resolved references are citable; unresolved ones don't count (prd.md > States and Edge Cases).
-    refs
-      .filter((r) => r.qlooId)
-      .forEach((r, i) => {
-        const below = r.fitBySegment[seg.id] == null ? " (this crowd doesn't engage with it)" : ''
-        add('R', i, `ref:${r.qlooId}`, `"${r.text}"${r.resolvedName ? ` = ${r.resolvedName}` : ''}: ${normFit(r, seg.id)}/100${below}`)
+    // Only resolved entities are scored (Qloo omits what an audience doesn't engage with); themes count only when Qloo
+    // places them among this audience's top themes. Unresolved references don't count (prd.md > States and Edge Cases).
+    const ents = refs.filter(isScoredEntity)
+    if (ents.length) {
+      lines.push("How this crowd relates to the brands, places and artists the ad mentions (Qloo; 0 = no engagement, 100 = the strongest fit among the segments):")
+      ents.forEach((r, i) => {
+        const none = r.fitBySegment[seg.id] == null ? " (this crowd doesn't engage with it)" : ''
+        add('R', i, `ref:${r.qlooId}`, `"${r.text}" = ${r.resolvedName}: ${normFit(r, seg.id)}/100${none}`)
       })
+    }
+    const themes = refs.filter((r) => r.kind === 'theme' && r.qlooId && r.fitBySegment[seg.id] != null)
+    if (themes.length) {
+      lines.push('Themes in the ad that are among this crowd\'s top themes (Qloo):')
+      themes.forEach((r, i) => add('R', ents.length + i, `ref:${r.qlooId}`, `"${r.text}" = ${r.resolvedName}`))
+    }
     const unresolved = refs.filter((r) => !r.qlooId).map((r) => `"${r.text}"`)
-    if (unresolved.length) lines.push(`Not found in Qloo (no data, don't cite): ${unresolved.join(', ')}`)
+    if (unresolved.length) lines.push(`Not matched in Qloo (no data, don't cite): ${unresolved.join(', ')}`)
   }
   return { prompt: lines.join('\n'), aliases }
 }
@@ -179,18 +187,16 @@ export function locateQuote(text: string, quote: string): { start: number; end: 
   return { start: t.map[i], end: t.map[i + nq.length - 1] + 1 }
 }
 
-// Reference fit normalised across segments per reference: the best-fitting segment = 100, below cutoff (null) = 0.
+// Reference fit on an absolute scale: Qloo affinities for scored items sit around 0.75–1.0, so map that range to 0–100;
+// an item Qloo omits for this audience (no engagement) is 0. Absolute, not min-max: 0.84 vs 0.83 must stay "the same".
+export const FIT_FLOOR = 0.75
 export function normFit(ref: Reference, segId: string): number {
-  const vals = Object.values(ref.fitBySegment).map((v) => v ?? 0)
-  const v = ref.fitBySegment[segId] ?? 0
-  const lo = Math.min(...vals)
-  const hi = Math.max(...vals)
-  if (hi === lo) return hi === 0 ? 0 : 50
-  return Math.round(((v - lo) / (hi - lo)) * 100)
+  const v = ref.fitBySegment[segId]
+  return v == null ? 0 : Math.round(Math.max(0, Math.min(1, (v - FIT_FLOOR) / (1 - FIT_FLOOR))) * 100)
 }
 
 export function segmentRefFit(refs: Reference[], segId: string): number | null {
-  const resolved = refs.filter((r) => r.qlooId && segId in r.fitBySegment)
+  const resolved = refs.filter((r) => isScoredEntity(r) && segId in r.fitBySegment)
   if (!resolved.length) return null
   return Math.round(resolved.reduce((s, r) => s + normFit(r, segId), 0) / resolved.length)
 }
