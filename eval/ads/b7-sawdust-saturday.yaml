@@ -1,0 +1,77 @@
+# Tier B. Written without consulting Qloo. All brands are fictional.
+id: b7-sawdust-saturday
+tier: B
+briefText: |-
+  Ad copy for Northwoods Tool Co., a fictional tool brand, running as an email in the US, aimed at adults 30-54 in the US.
+
+  Subject: Your basement isn't going to finish itself.
+  Saturday plan: coffee, a This Old House rerun, a run to Menards, and finally framing that wall before the first snow. Northwoods cordless kits are 20% off through Sunday. Bring the shop vac.
+brief:
+  adText: |-
+    Subject: Your basement isn't going to finish itself.
+    Saturday plan: coffee, a This Old House rerun, a run to Menards, and finally framing that wall before the first snow. Northwoods cordless kits are 20% off through Sunday. Bring the shop vac.
+  adType: copy
+  channel: email
+  brandLine: Northwoods Tool Co., a fictional tool brand
+  market:
+    country: US
+    region: null
+    city: null
+  target:
+    text: adults 30-54 in the US
+    ageBuckets: null
+    gender: null
+    interests: []
+    communities: []
+  unused: []
+segments:
+  - id: mpls-diy
+    name: Minneapolis home-and-DIY fans, 35-54
+    locationQuery: Minneapolis
+    ageBuckets:
+      - 35_to_44
+      - 45_to_54
+    tagQueries:
+      - home improvement
+    entityQueries: []
+    gender: null
+  - id: atl-hiphop
+    name: Atlanta hip-hop fans, 18-24
+    locationQuery: Atlanta
+    ageBuckets:
+      - 24_and_younger
+    tagQueries:
+      - hip hop
+    entityQueries: []
+    gender: null
+  - id: la-kpop
+    name: Los Angeles K-pop fans, 18-24
+    locationQuery: Los Angeles
+    ageBuckets:
+      - 24_and_younger
+    tagQueries:
+      - k-pop
+    entityQueries: []
+    gender: null
+  - id: bk-electronic
+    name: Brooklyn electronic-music fans, 25-34
+    locationQuery: Brooklyn
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - electronic music
+    entityQueries: []
+    gender: null
+  - id: miami-latin
+    name: Miami reggaeton fans, 25-34
+    locationQuery: Miami
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - reggaeton
+    entityQueries: []
+    gender: null
+intendedSegmentId: mpls-diy
+actualFitSegmentId: null

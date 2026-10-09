@@ -1,0 +1,90 @@
+# Demo example. Written without consulting Qloo. All brands are fictional.
+id: demo-concert
+tier: demo
+briefText: |-
+  Script for Northline Fest, a fictional indie music festival in Austin, running as an Instagram reel in the US, aimed at live-music fans 21-34 in US cities.
+
+  [0:00] Close-up: a needle drops on a record. A warm, psychedelic bassline kicks in.
+  VO: Remember when you found a band before everyone else did?
+  [0:04] Sunset over Barton Springs. The crowd sways.
+  VO: Three days. Forty bands you'll brag about next year. One cold Topo Chico in your hand.
+  [0:10] Fast cuts: food trucks, vintage tees, a drummer mid-solo.
+  VO: Northline Fest. Zilker Park, Austin. November 14-16.
+  [0:14] On screen: Early-bird passes $149. Link in bio.
+  VO: Get there before the algorithm does.
+brief:
+  adText: |-
+    [0:00] Close-up: a needle drops on a record. A warm, psychedelic bassline kicks in.
+    VO: Remember when you found a band before everyone else did?
+    [0:04] Sunset over Barton Springs. The crowd sways.
+    VO: Three days. Forty bands you'll brag about next year. One cold Topo Chico in your hand.
+    [0:10] Fast cuts: food trucks, vintage tees, a drummer mid-solo.
+    VO: Northline Fest. Zilker Park, Austin. November 14-16.
+    [0:14] On screen: Early-bird passes $149. Link in bio.
+    VO: Get there before the algorithm does.
+  adType: script
+  channel: reel
+  brandLine: Northline Fest, a fictional indie music festival in Austin
+  market:
+    country: US
+    region: null
+    city: null
+  target:
+    text: live-music fans 21-34 in US cities
+    ageBuckets: null
+    gender: null
+    interests: []
+    communities: []
+  unused: []
+segments:
+  - id: austin-indie
+    name: Austin indie-music fans, 25-34
+    locationQuery: Austin
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - indie rock
+    entityQueries: []
+    gender: null
+  - id: nash-country
+    name: Nashville country fans, 25-34
+    locationQuery: Nashville
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - country music
+    entityQueries: []
+    gender: null
+  - id: atl-hiphop
+    name: Atlanta hip-hop fans, 18-24
+    locationQuery: Atlanta
+    ageBuckets:
+      - 24_and_younger
+    tagQueries:
+      - hip hop
+    entityQueries: []
+    gender: null
+  - id: bk-electronic
+    name: Brooklyn electronic-music fans, 25-34
+    locationQuery: Brooklyn
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - electronic music
+    entityQueries: []
+    gender: null
+  - id: miami-latin
+    name: Miami reggaeton fans, 25-34
+    locationQuery: Miami
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - reggaeton
+    entityQueries: []
+    gender: null
+intendedSegmentId: null
+actualFitSegmentId: null

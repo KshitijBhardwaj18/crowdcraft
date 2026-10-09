@@ -1,0 +1,83 @@
+# Tier B. Written without consulting Qloo. All brands are fictional.
+id: b4-beltline-wings
+tier: B
+briefText: |-
+  Script for Flatz, a fictional late-night wings chain, running as an Instagram reel in the US, aimed at adults 18-24 in the US.
+
+  [0:00] Golden hour on the Beltline. A Metro Boomin beat drops.
+  VO: Lemon pepper wet. Extra flats. No debate.
+  [0:04] Friends crowded around a box of wings outside Ponce City Market.
+  VO: Flatz. Open till 3, because the night isn't over after the show.
+  [0:09] On screen: Order in the app.
+brief:
+  adText: |-
+    [0:00] Golden hour on the Beltline. A Metro Boomin beat drops.
+    VO: Lemon pepper wet. Extra flats. No debate.
+    [0:04] Friends crowded around a box of wings outside Ponce City Market.
+    VO: Flatz. Open till 3, because the night isn't over after the show.
+    [0:09] On screen: Order in the app.
+  adType: script
+  channel: reel
+  brandLine: Flatz, a fictional late-night wings chain
+  market:
+    country: US
+    region: null
+    city: null
+  target:
+    text: adults 18-24 in the US
+    ageBuckets: null
+    gender: null
+    interests: []
+    communities: []
+  unused: []
+segments:
+  - id: atl-hiphop
+    name: Atlanta hip-hop fans, 18-24
+    locationQuery: Atlanta
+    ageBuckets:
+      - 24_and_younger
+    tagQueries:
+      - hip hop
+    entityQueries: []
+    gender: null
+  - id: nash-country
+    name: Nashville country fans, 25-34
+    locationQuery: Nashville
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - country music
+    entityQueries: []
+    gender: null
+  - id: denver-outdoors
+    name: Denver outdoor-adventure fans, 30-44
+    locationQuery: Denver
+    ageBuckets:
+      - 30_to_34
+      - 35_to_44
+    tagQueries:
+      - hiking
+    entityQueries: []
+    gender: null
+  - id: mpls-diy
+    name: Minneapolis home-and-DIY fans, 35-54
+    locationQuery: Minneapolis
+    ageBuckets:
+      - 35_to_44
+      - 45_to_54
+    tagQueries:
+      - home improvement
+    entityQueries: []
+    gender: null
+  - id: la-kpop
+    name: Los Angeles K-pop fans, 18-24
+    locationQuery: Los Angeles
+    ageBuckets:
+      - 24_and_younger
+    tagQueries:
+      - k-pop
+    entityQueries: []
+    gender: null
+intendedSegmentId: atl-hiphop
+actualFitSegmentId: null

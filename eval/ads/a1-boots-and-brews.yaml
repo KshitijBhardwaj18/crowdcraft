@@ -1,0 +1,74 @@
+# Tier A. Written without consulting Qloo. All brands are fictional.
+id: a1-boots-and-brews
+tier: A
+briefText: |-
+  Ad copy for Boots & Brews Fest, a fictional country music festival in Nashville, running as a social post in the US, aimed at country music fans 21-34 in the US.
+
+  Calling all country fans. Boots & Brews Fest is back in Nashville: two days of honky-tonk, steel guitar and singalongs under the stars. Dust off your boots, grab your crew and get your tickets before they're gone.
+brief:
+  adText: "Calling all country fans. Boots & Brews Fest is back in Nashville: two days of honky-tonk, steel guitar and singalongs under the stars. Dust off your boots, grab your crew and get your tickets before they're gone."
+  adType: copy
+  channel: social
+  brandLine: Boots & Brews Fest, a fictional country music festival in Nashville
+  market:
+    country: US
+    region: null
+    city: null
+  target:
+    text: country music fans 21-34 in the US
+    ageBuckets: null
+    gender: null
+    interests: []
+    communities: []
+  unused: []
+segments:
+  - id: nash-country
+    name: Nashville country fans, 25-34
+    locationQuery: Nashville
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - country music
+    entityQueries: []
+    gender: null
+  - id: atl-hiphop
+    name: Atlanta hip-hop fans, 18-24
+    locationQuery: Atlanta
+    ageBuckets:
+      - 24_and_younger
+    tagQueries:
+      - hip hop
+    entityQueries: []
+    gender: null
+  - id: bk-electronic
+    name: Brooklyn electronic-music fans, 25-34
+    locationQuery: Brooklyn
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - electronic music
+    entityQueries: []
+    gender: null
+  - id: la-kpop
+    name: Los Angeles K-pop fans, 18-24
+    locationQuery: Los Angeles
+    ageBuckets:
+      - 24_and_younger
+    tagQueries:
+      - k-pop
+    entityQueries: []
+    gender: null
+  - id: denver-outdoors
+    name: Denver outdoor-adventure fans, 30-44
+    locationQuery: Denver
+    ageBuckets:
+      - 30_to_34
+      - 35_to_44
+    tagQueries:
+      - hiking
+    entityQueries: []
+    gender: null
+intendedSegmentId: nash-country
+actualFitSegmentId: null

@@ -1,7 +1,11 @@
 // The single entry for model calls (spec.md > D3). Muse via the AI SDK's openai-compatible provider.
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { generateText, hasToolCall, Output, stepCountIs, tool, type ToolSet } from 'ai'
-import type { z } from 'zod'
+import { execFile } from 'node:child_process'
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { z } from 'zod'
 import { limiter, type Trace } from './trace.ts'
 
 export const MODEL = process.env.MUSE_MODEL ?? 'muse-spark-1.3-contributor'
@@ -78,4 +82,37 @@ export async function runAgent<T>(
     label: `${o.label ?? 'Agent run'} (final answer)`,
   })
   return { result, steps: r.steps.length, finished: false }
+}
+
+// The eval grader (spec.md > D3): Claude via `claude -p`, run from an empty directory with project-only settings,
+// so no global CLAUDE.md, hooks or plugins reach it (verified in slice 2).
+
+const GRADER_MODEL = process.env.GRADER_MODEL ?? 'sonnet'
+const graderGate = limiter(3)
+let graderDir: Promise<string> | null = null
+
+export async function gradeWithClaude<T>(schema: z.ZodType<T>, system: string, prompt: string): Promise<T> {
+  graderDir ??= mkdtemp(path.join(tmpdir(), 'crowdcraft-grader-'))
+  const cwd = await graderDir
+  const { $schema: _, ...jsonSchema } = z.toJSONSchema(schema) // claude -p rejects zod's draft-2020-12 $schema stamp
+  const args = [
+    '-p', prompt,
+    '--model', GRADER_MODEL,
+    '--system-prompt', system,
+    '--setting-sources', 'project',
+    '--tools', '',
+    '--output-format', 'json',
+    '--json-schema', JSON.stringify(jsonSchema),
+  ]
+  const stdout = await graderGate(
+    () =>
+      new Promise<string>((resolve, reject) =>
+        execFile('claude', args, { cwd, maxBuffer: 32 * 1024 * 1024, timeout: 300_000 }, (err, out, errOut) =>
+          err ? reject(new Error(`claude -p failed: ${errOut || err.message}`)) : resolve(out),
+        ).stdin?.end(), // no stdin, or claude waits 3s for it
+      ),
+  )
+  const res = JSON.parse(stdout)
+  if (res.is_error || !res.structured_output) throw new Error(`claude -p returned no structured output: ${String(res.result).slice(0, 200)}`)
+  return schema.parse(res.structured_output)
 }

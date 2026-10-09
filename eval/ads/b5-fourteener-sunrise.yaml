@@ -1,0 +1,74 @@
+# Tier B. Written without consulting Qloo. All brands are fictional.
+id: b5-fourteener-sunrise
+tier: B
+briefText: |-
+  Ad copy for Ridgeline Hydration, a fictional water-bottle brand, running as a billboard in the US, aimed at adults 25-44 in the US.
+
+  Alpine start. Fourteener by sunrise. Red Rocks by sundown. Ridgeline: the bottle that keeps up.
+brief:
+  adText: "Alpine start. Fourteener by sunrise. Red Rocks by sundown. Ridgeline: the bottle that keeps up."
+  adType: copy
+  channel: billboard
+  brandLine: Ridgeline Hydration, a fictional water-bottle brand
+  market:
+    country: US
+    region: null
+    city: null
+  target:
+    text: adults 25-44 in the US
+    ageBuckets: null
+    gender: null
+    interests: []
+    communities: []
+  unused: []
+segments:
+  - id: denver-outdoors
+    name: Denver outdoor-adventure fans, 30-44
+    locationQuery: Denver
+    ageBuckets:
+      - 30_to_34
+      - 35_to_44
+    tagQueries:
+      - hiking
+    entityQueries: []
+    gender: null
+  - id: atl-hiphop
+    name: Atlanta hip-hop fans, 18-24
+    locationQuery: Atlanta
+    ageBuckets:
+      - 24_and_younger
+    tagQueries:
+      - hip hop
+    entityQueries: []
+    gender: null
+  - id: la-kpop
+    name: Los Angeles K-pop fans, 18-24
+    locationQuery: Los Angeles
+    ageBuckets:
+      - 24_and_younger
+    tagQueries:
+      - k-pop
+    entityQueries: []
+    gender: null
+  - id: miami-latin
+    name: Miami reggaeton fans, 25-34
+    locationQuery: Miami
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - reggaeton
+    entityQueries: []
+    gender: null
+  - id: bk-electronic
+    name: Brooklyn electronic-music fans, 25-34
+    locationQuery: Brooklyn
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - electronic music
+    entityQueries: []
+    gender: null
+intendedSegmentId: denver-outdoors
+actualFitSegmentId: null

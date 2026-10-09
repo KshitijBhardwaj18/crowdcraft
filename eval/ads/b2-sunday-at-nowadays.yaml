@@ -1,0 +1,86 @@
+# Tier B. Written without consulting Qloo. All brands are fictional.
+id: b2-sunday-at-nowadays
+tier: B
+briefText: |-
+  Script for Lowfreq, a fictional audio brand, running as an Instagram reel in the US, aimed at music fans 21-34 in US cities.
+
+  [0:00] A dark warehouse, one red light. A Four Tet edit builds.
+  VO: For the Sunday that started on Saturday.
+  [0:04] The L train platform at 4am. Earplugs in a palm.
+  VO: Lowfreq open-back headphones. Hear the record the way it sounded at Nowadays.
+  [0:09] On screen: Lowfreq. Link in bio.
+brief:
+  adText: |-
+    [0:00] A dark warehouse, one red light. A Four Tet edit builds.
+    VO: For the Sunday that started on Saturday.
+    [0:04] The L train platform at 4am. Earplugs in a palm.
+    VO: Lowfreq open-back headphones. Hear the record the way it sounded at Nowadays.
+    [0:09] On screen: Lowfreq. Link in bio.
+  adType: script
+  channel: reel
+  brandLine: Lowfreq, a fictional audio brand
+  market:
+    country: US
+    region: null
+    city: null
+  target:
+    text: music fans 21-34 in US cities
+    ageBuckets: null
+    gender: null
+    interests: []
+    communities: []
+  unused: []
+segments:
+  - id: bk-electronic
+    name: Brooklyn electronic-music fans, 25-34
+    locationQuery: Brooklyn
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - electronic music
+    entityQueries: []
+    gender: null
+  - id: nash-country
+    name: Nashville country fans, 25-34
+    locationQuery: Nashville
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - country music
+    entityQueries: []
+    gender: null
+  - id: austin-indie
+    name: Austin indie-music fans, 25-34
+    locationQuery: Austin
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - indie rock
+    entityQueries: []
+    gender: null
+  - id: chi-sports
+    name: Chicago sports fans, 35-54
+    locationQuery: Chicago
+    ageBuckets:
+      - 35_to_44
+      - 45_to_54
+    tagQueries:
+      - basketball
+    entityQueries:
+      - Chicago Bulls
+    gender: null
+  - id: mpls-diy
+    name: Minneapolis home-and-DIY fans, 35-54
+    locationQuery: Minneapolis
+    ageBuckets:
+      - 35_to_44
+      - 45_to_54
+    tagQueries:
+      - home improvement
+    entityQueries: []
+    gender: null
+intendedSegmentId: bk-electronic
+actualFitSegmentId: null
