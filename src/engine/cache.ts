@@ -5,7 +5,7 @@ import path from 'node:path'
 
 const DIR = '.cache/stages'
 
-export async function stageCache<T>(stage: string, input: unknown, fn: () => Promise<T>, noCache = false): Promise<{ value: T; cached: boolean }> {
+export async function stageCache<T>(stage: string, input: unknown, fn: () => Promise<T>, noCache = false, keep: (v: T) => boolean = () => true): Promise<{ value: T; cached: boolean }> {
   const file = path.join(DIR, `${stage}-${createHash('sha256').update(JSON.stringify(input)).digest('hex').slice(0, 24)}.json`)
   if (!noCache) {
     try {
@@ -13,6 +13,7 @@ export async function stageCache<T>(stage: string, input: unknown, fn: () => Pro
     } catch {}
   }
   const value = await fn()
+  if (!keep(value)) return { value, cached: false } // degraded results are never cached
   await mkdir(DIR, { recursive: true })
   await writeFile(file, JSON.stringify(value))
   return { value, cached: false }

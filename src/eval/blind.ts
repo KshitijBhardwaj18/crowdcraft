@@ -2,15 +2,17 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Arm, Review } from '../contracts.ts'
+import { shuffle } from '../trace.ts'
 
 export type PairCandidate = { ad: string; segment: string; a: Review; b: Review }
 type Key = Record<string, { A: Arm; B: Arm; ad: string; segment: string }>
 
-const cell = (s: string) => `"${s.replace(/"/g, '""')}"`
+// Quoted, and guarded against spreadsheet formula injection (text starting with = + - @ is prefixed with ').
+const cell = (s: string) => `"${(/^[=+\-@]/.test(s) ? `'${s}` : s).replace(/"/g, '""')}"`
 const text = (r: Review) => r.reaction.map((s) => s.sentence).join(' ')
 
 export async function exportBlindPairs(dir: string, candidates: PairCandidate[], count = 20) {
-  const picked = [...candidates].sort(() => Math.random() - 0.5).slice(0, count)
+  const picked = shuffle(candidates).slice(0, count)
   const key: Key = {}
   const rows = ['pair,ad,segment,reaction_A,reaction_B,choice']
   picked.forEach((c, i) => {
@@ -50,8 +52,10 @@ export function parseCsv(src: string): string[][] {
 // Wins per arm from the filled-in `choice` column (A, B or tie; anything else is skipped).
 export async function readBlindChoices(dir: string) {
   const key: Key = JSON.parse(await readFile(path.join(dir, 'blind-key.json'), 'utf8'))
-  const [head, ...rows] = parseCsv(await readFile(path.join(dir, 'blind-pairs.csv'), 'utf8'))
-  const col = (name: string) => head.indexOf(name)
+  // Spreadsheet apps often save a UTF-8 byte-order mark; strip it so the header still matches.
+  const [head, ...rows] = parseCsv((await readFile(path.join(dir, 'blind-pairs.csv'), 'utf8')).replace(/^\uFEFF/, ''))
+  const col = (name: string) => head.map((h) => h.trim().toLowerCase()).indexOf(name)
+  if (col('pair') < 0 || col('choice') < 0) throw new Error('blind-pairs.csv needs "pair" and "choice" columns; was the header row changed?')
   const wins: Partial<Record<Arm, number>> = {}
   let judged = 0
   let ties = 0
@@ -63,5 +67,6 @@ export async function readBlindChoices(dir: string) {
     if (choice === 'TIE') ties++
     else wins[k[choice as 'A' | 'B']] = (wins[k[choice as 'A' | 'B']] ?? 0) + 1
   }
+  if (rows.length && !judged) console.log(`! None of the ${rows.length} pairs has a choice of A, B or tie yet.`)
   return { judged, ties, wins, arms: [...new Set(Object.values(key).flatMap((k) => [k.A, k.B]))] }
 }

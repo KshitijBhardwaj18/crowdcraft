@@ -1,6 +1,7 @@
 // Run → one self-contained dashboard page (prd.md > Run Report (HTML)): the ad, KPIs, what to do, results by region and
 // age, and per-audience detail with sources and the no-Qloo comparison. Inline CSS and a few lines of JS; no framework.
 import type { Arm, Highlight, Reference, Review, Run, Segment } from '../contracts.ts'
+import { FIT_FLOOR } from '../engine/judge.ts'
 import { lineTally } from '../engine/summary.ts'
 
 export const esc = (s: unknown) =>
@@ -115,7 +116,13 @@ function deliverables(run: Run, name: (id: string) => string) {
     .map((v) => {
       const after = v.review.rankingScore
       const d = after - v.before
+      const jd = v.judgementBefore == null ? null : v.review.judgement - v.judgementBefore
+      const parts = [
+        jd == null ? null : `judgement ${v.judgementBefore} → ${v.review.judgement} (${jd >= 0 ? '+' : ''}${jd})`,
+        v.refFitBefore == null && v.review.refFit == null ? null : `reference fit ${v.refFitBefore ?? '–'} → ${v.review.refFit ?? '–'}`,
+      ].filter(Boolean)
       return `<div class="ver"><div class="aud-h"><b>${esc(name(v.segmentId))}</b><span class="spacer"></span><span class="delta ${d >= 0 ? 'up' : 'down'}">${v.before} → ${after} (${d >= 0 ? '+' : ''}${d})</span></div>
+      ${parts.length ? `<p class="small muted">${esc(parts.join(' · '))}. Reference fit tends to rise when a rewrite uses the audience's own taste, so the judgement change is the stronger signal.</p>` : ''}
       <pre class="script">${esc(v.adText)}</pre>
       ${v.usedTaste.length ? `<p class="ints"><span class="muted small">Uses their taste:</span> ${v.usedTaste.map((u) => `<span class="int">${esc(u)}</span>`).join('')}</p>` : ''}
       <details class="small"><summary>Their reaction to this version · ${esc(v.review.verdict)} · ${esc(v.review.wouldAct)}</summary><ul class="reaction">${v.review.reaction.map((x) => `<li>${esc(x.sentence)}</li>`).join('')}</ul></details></div>`
@@ -205,7 +212,7 @@ function heatPanel(run: Run) {
   const min = Math.min(...run.heat.map((h) => h.heat))
   const w = (x: number) => (max === min ? 100 : 15 + ((x - min) / (max - min)) * 85)
   const tag = { hot: '<span class="role r-hot">tested · strongest</span>', cool: '<span class="role r-cool">tested · contrast</span>', other: '' }
-  return `<section class="panel"><header class="ph"><h2>Where the ad's taste is strongest</h2><p class="muted">Qloo heatmap of the ad's references, rolled up to US metros and weighted by population. The audiences above were picked from here.</p></header>
+  return `<section class="panel"><header class="ph"><h2>Where the ad's taste is strongest</h2><p class="muted">Qloo heatmap of the ad's references, rolled up to US metros (each map tile weighted by Qloo's popularity score). The audiences tested were picked from here.</p></header>
 <ol class="heatlist">${run.heat
     .map((h) => `<li><span class="hl">${esc(h.label)}</span><span class="hb"><span style="width:${w(h.heat)}%" class="${h.role}"></span></span><span class="hv">${h.heat.toFixed(3)}</span>${tag[h.role]}</li>`)
     .join('')}</ol></section>`
@@ -219,7 +226,7 @@ function referencesPanel(run: Run) {
       .map((s) => {
         const v = r.fitBySegment[s.id]
         const gap = Object.values(r.fitBySegment).every((x) => x == null)
-        return `<td>${r.qlooId ? (v == null ? (gap ? '<span class="muted">no Qloo signal</span>' : '<span class="nofit">no engagement</span>') : `<span class="fitv" style="--a:${Math.max(0, (v - 0.8) / 0.2)}">${v.toFixed(2)}</span>`) : ''}</td>`
+        return `<td>${r.qlooId ? (v == null ? (gap ? '<span class="muted">no Qloo signal</span>' : '<span class="nofit">no engagement</span>') : `<span class="fitv" style="--a:${Math.max(0, (v - FIT_FLOOR) / (1 - FIT_FLOOR))}">${v.toFixed(2)}</span>`) : ''}</td>`
       })
       .join('')
     const skew = r.skew

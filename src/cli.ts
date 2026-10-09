@@ -1,5 +1,6 @@
 // CrowdCraft CLI (spec.md > Interfaces). `npm run cc -- <command>`.
 import { readFile, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { tool } from 'ai'
 import { z } from 'zod'
@@ -7,7 +8,7 @@ import { ARMS, Arm, Brief, Fixture, Run, Verdict, type TraceEvent } from './cont
 import { renderReport } from './report/render.ts'
 import { quota } from './qloo/client.ts'
 import { judge } from './engine/judge.ts'
-import { parseBrief } from './engine/brief.ts'
+import { parseBrief, validateAd } from './engine/brief.ts'
 import { assembleRun, buildSegments, deliverablesFor, judgeAll, writeRun } from './engine/run.ts'
 import { resolveReferences, scoreReferences } from './engine/references.ts'
 import YAML from 'yaml'
@@ -49,13 +50,16 @@ async function cmdRun() {
       if (!file || file.startsWith('--')) throw new Error('Usage: npm run cc -- run <brief.yaml> | run --text "<brief and ad>" | run --text-file <file> | run --fixture <file.json>')
       const doc = YAML.parse(await readFile(file, 'utf8'))
       brief = Brief.parse(doc.brief ?? doc) // an eval ad file or a plain brief
+      const check = validateAd(brief.adText)
+      if (check.error) throw new Error(check.error)
+      for (const w of check.warnings) console.log(`! ${w}`)
     }
     const same = flag('same-segments')
     if (same) {
       // Compare an edited ad on the audiences of an earlier run (prd.md > Core Journey, re-runs).
       const prev = Run.parse(JSON.parse(await readFile(same, 'utf8')))
       segments = prev.segments
-      heat = prev.heat
+      heat = null // the earlier run's heatmap describes the earlier ad, not this one
       references = await scoreReferences(await resolveReferences(brief, { trace }), segments, { trace })
       console.log(`Reusing ${segments.length} audiences from ${same}`)
     } else {
@@ -97,7 +101,7 @@ async function cmdReport() {
   const file = args[1]
   if (!file) throw new Error('Usage: npm run cc -- report <runs/<id>/run.json>')
   const run = Run.parse(JSON.parse(await readFile(file, 'utf8')))
-  const out = file.replace(/run\.json$/, 'report.html')
+  const out = path.join(path.dirname(file), 'report.html')
   await writeFile(out, renderReport(run))
   console.log(`Report: ${out}`)
 }
@@ -113,6 +117,8 @@ async function cmdEval() {
   const arms = (flag('arms')?.split(',') ?? ARMS).map((a) => Arm.parse(a))
   const ads = await loadEvalAds(flag('ads')?.split(',') ?? null)
   const reps = Number(flag('reps') ?? 2)
+  if (!Number.isInteger(reps) || reps < 1) throw new Error('--reps must be a whole number of at least 1 (2 measures stability).')
+  if (reps === 1) console.log('! --reps 1: stability is not measured, so the go/no-go stays pending.')
   const outDir = `eval-results/${new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15)}`
   console.log(`Eval: ${ads.length} ads × ${arms.length} arms × ${reps} reps with ${MODEL} → ${outDir}`)
   const r = await runEval({ ads, arms, reps, outDir, log: console.log })

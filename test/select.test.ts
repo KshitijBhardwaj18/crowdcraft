@@ -1,28 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import type { EvidenceItem } from '../src/contracts.ts'
 import { ageBands, ageLabel, regionLabel } from '../src/engine/candidates.ts'
-import { distanceMatrix, distinctiveItems, greedySelect, pearson, type Column } from '../src/engine/select.ts'
+import { distinctiveItems, greedySelect, jaccard, type Column } from '../src/engine/select.ts'
 import { isSensitiveTag } from '../src/qloo/tools.ts'
 
 const item = (id: string): EvidenceItem => ({ qlooId: id, name: id, type: 'urn:entity:artist', affinity: null, imageUrl: null })
 const col = (id: string, domain: Column['domain'] = 'artist'): Column => ({ id, domain, item: item(id) })
 
 describe('distance and selection', () => {
-  it('pearson is 1 for identical patterns, -1 for opposite, 0 for flat', () => {
-    expect(pearson([1, 2, 3], [2, 4, 6])).toBeCloseTo(1)
-    expect(pearson([1, 2, 3], [3, 2, 1])).toBeCloseTo(-1)
-    expect(pearson([1, 1, 1], [1, 2, 3])).toBe(0)
-  })
-
   it('keeps the most different candidates and drops near-duplicates', () => {
     // a and a2 are near-identical; b and c differ from them and from each other.
     const rows = [
       [0.9, 0.9, 0, 0, 0, 0],
-      [0.9, 0.88, 0, 0, 0, 0.1],
+      [0.9, 0.88, 0, 0, 0, 0],
       [0, 0, 0.9, 0.9, 0, 0],
       [0, 0, 0, 0, 0.9, 0.9],
     ]
-    const kept = greedySelect(distanceMatrix(rows), [2, 3, 2, 2], { max: 6, min: 3, stopAt: 0.15 })
+    const ids = rows.map((r) => r.flatMap((v, k) => (v > 0 ? [`i${k}`] : [])))
+    const kept = greedySelect(ids.map((a) => ids.map((b) => (a === b ? 0 : 1 - jaccard(a, b)))), [2, 3, 2, 2], { max: 6, min: 3, stopAt: 0.15 })
     expect(kept[0]).toBe(1) // richest first
     expect(kept).toHaveLength(3)
     expect(kept.includes(0)).toBe(false) // a is a near-duplicate of a2
@@ -69,8 +64,11 @@ describe('cells', () => {
 })
 
 describe('isSensitiveTag', () => {
-  it('blocks identity tags but keeps genres', () => {
-    for (const t of ['queer', 'Trans', 'drag queens', 'Christian', 'Latina', 'Republican']) expect(isSensitiveTag(t)).toBe(true)
-    for (const t of ['Latin pop', 'Indie - Rock', 'Jazz club', 'Drag Race', 'Transit']) expect(isSensitiveTag(t)).toBe(false)
+  it('blocks identity tags by name and by Qloo namespace, but keeps genres', () => {
+    for (const t of ['queer', 'Trans', 'drag queens', 'Christian', 'Christianity', 'Islam', 'Judaism', 'LGBTQIA+', 'Latina', 'Republican', 'Progressive', 'Faith-Oriented', 'Spirituality', 'Sexuality', 'Gender fluidity', 'Mexican-American', 'Feminist', 'Black-owned'])
+      expect(isSensitiveTag(t), t).toBe(true)
+    expect(isSensitiveTag('Families', 'urn:tag:audience:qloo:families')).toBe(true)
+    expect(isSensitiveTag('Asian-owned', 'urn:tag:inclusivity:qloo:asian_owned')).toBe(true)
+    for (const t of ['Latin pop', 'Indie - Rock', 'Jazz club', 'Drag Race', 'Transit', 'Black Metal', 'Black comedy']) expect(isSensitiveTag(t, 'urn:tag:genre:music:x'), t).toBe(false)
   })
 })

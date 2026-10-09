@@ -16,7 +16,7 @@ This is milestone 1: the taste engine, its evaluation harness and an HTML dashbo
 
 ## Setup
 
-Requires Node 22+. The eval's specificity grader uses the [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) (`claude -p`).
+Requires Node 22.9+. The eval's specificity grader uses the [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) (`claude -p`).
 
 ```bash
 npm install
@@ -41,7 +41,7 @@ Each run writes `runs/<id>/run.json` and a self-contained dashboard, `runs/<id>/
 
 ## Notes
 
-- Qloo responses are cached locally in `.cache/` and never committed (Qloo terms). The hackathon key allows 10,000 calls a month; a fresh run uses about 70–100, and cached re-runs use none.
+- Qloo responses are cached locally in `.cache/` and never committed (Qloo terms). The hackathon key allows 10,000 calls a month; a fresh run uses roughly 150–200 (audiences about 75, references and fit about 30, better versions about 40–60), and cached re-runs use far fewer.
 - CrowdCraft never targets or splits audiences by ethnicity, race, religion, sexuality or politics; culture comes through taste.
 - Results are directional, not guaranteed.
 

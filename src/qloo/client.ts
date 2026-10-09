@@ -16,6 +16,8 @@ export type Domain = (typeof DOMAINS)[number]
 export type Ctx = { trace?: Trace; stage?: TraceEvent['stage']; noCache?: boolean }
 type Params = Record<string, string | number | boolean | null | undefined>
 
+const inflight = new Map<string, Promise<any>>()
+
 export async function qlooGet(p: string, params: Params, ctx: Ctx, what: string): Promise<any> {
   const clean = Object.entries(params)
     .filter(([, v]) => v != null && v !== '')
@@ -25,43 +27,70 @@ export async function qlooGet(p: string, params: Params, ctx: Ctx, what: string)
   const key = createHash('sha256').update(`${p}?${qs}`).digest('hex')
   const file = path.join(CACHE, `${key}.json`)
   const t = ctx.trace
+  const stage = ctx.stage ?? 'fingerprints'
   if (!ctx.noCache) {
     try {
       const cached = JSON.parse(await readFile(file, 'utf8'))
-      t?.add(ctx.stage ?? 'fingerprints', 'qloo_call', `${what} (cached)`, { path: p, params: Object.fromEntries(clean) })
+      t?.add(stage, 'qloo_call', `${what} (cached)`, { path: p, params: Object.fromEntries(clean) })
       return cached
     } catch {}
   }
-  const body = await gate(async () => {
-    for (let attempt = 0; ; attempt++) {
-      const res = await fetch(`${BASE}${p}?${qs}`, { headers: { 'X-Api-Key': process.env.QLOO_API_KEY ?? '' } })
-      const left = res.headers.get('x-month-ratelimit-remaining')
-      if (left != null) quota.monthRemaining = Number(left)
-      quota.monthLimit = Number(res.headers.get('x-month-ratelimit-limit') ?? quota.monthLimit)
-      if (res.ok) return res.json()
-      if ((res.status === 429 || res.status >= 500) && attempt < 5) {
-        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
-        continue
-      }
-      throw new Error(`Qloo ${p} → HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`)
-    }
-  })
+  // Identical calls running at the same time share one request (saves quota).
+  if (!inflight.has(key)) inflight.set(key, fetchWithRetry(p, qs).finally(() => inflight.delete(key)))
+  let body: any
+  try {
+    body = await inflight.get(key)!
+  } catch (e) {
+    t?.add(stage, 'error', `${what} failed: ${(e as Error).message.slice(0, 200)}`, { path: p })
+    throw e
+  }
   if (t) t.usage.qlooCalls++
-  t?.add(ctx.stage ?? 'fingerprints', 'qloo_call', what, { path: p, params: Object.fromEntries(clean) })
+  t?.add(stage, 'qloo_call', what, { path: p, params: Object.fromEntries(clean), quotaLeft: quota.monthRemaining })
   await mkdir(CACHE, { recursive: true })
   await writeFile(file, JSON.stringify(body))
   return body
 }
 
+// Retries 429, 5xx and network errors with exponential backoff (honouring Retry-After); 30s timeout per attempt.
+async function fetchWithRetry(p: string, qs: string): Promise<any> {
+  return gate(async () => {
+    for (let attempt = 0; ; attempt++) {
+      let res: Response
+      try {
+        res = await fetch(`${BASE}${p}?${qs}`, { headers: { 'X-Api-Key': process.env.QLOO_API_KEY ?? '' }, signal: AbortSignal.timeout(30_000) })
+      } catch (e) {
+        if (attempt < 3) {
+          await sleep(1000 * 2 ** attempt)
+          continue
+        }
+        throw new Error(`Qloo ${p} → network error: ${(e as Error).message}`)
+      }
+      const left = res.headers.get('x-month-ratelimit-remaining')
+      const limit = res.headers.get('x-month-ratelimit-limit')
+      if (left != null) quota.monthRemaining = Number(left)
+      if (limit != null) quota.monthLimit = Number(limit)
+      if (res.ok) return res.json()
+      if ((res.status === 429 || res.status >= 500) && attempt < 3) {
+        const after = Number(res.headers.get('retry-after'))
+        await sleep(after > 0 ? after * 1000 : 1000 * 2 ** attempt)
+        continue
+      }
+      if (res.status === 401) throw new Error('Qloo rejected the API key (401). Check QLOO_API_KEY in .env and that it is the hackathon key.')
+      throw new Error(`Qloo ${p} → HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`)
+    }
+  })
+}
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
 export function signalParams(s: QlooSignals): Params {
   return {
     'signal.location.query': s.locationId ? null : s.locationQuery,
     'signal.location': s.locationId,
-    'signal.demographics.age': s.ageBuckets?.join(','),
+    'signal.demographics.age': s.ageBuckets?.slice().sort().join(','),
     'signal.demographics.gender': s.gender,
-    'signal.demographics.audiences': s.audienceIds.join(','),
-    'signal.interests.tags': s.tagIds.join(','),
-    'signal.interests.entities': s.entityIds.join(','),
+    'signal.demographics.audiences': s.audienceIds.slice().sort().join(','),
+    'signal.interests.tags': s.tagIds.slice().sort().join(','),
+    'signal.interests.entities': s.entityIds.slice().sort().join(','),
   }
 }
 
@@ -95,15 +124,16 @@ export async function topTags(s: QlooSignals, take: number, ctx: Ctx): Promise<E
 // Affinity of specific entities for these signals. Qloo omits entities below its cutoff: they come back as null.
 export async function fit(domain: string, s: QlooSignals, ids: string[], ctx: Ctx): Promise<Map<string, number | null>> {
   const out = new Map<string, number | null>(ids.map((id) => [id, null]))
-  for (let i = 0; i < ids.length; i += 50) {
-    const chunk = ids.slice(i, i + 50)
+  const sorted = [...new Set(ids)].sort()
+  for (let i = 0; i < sorted.length; i += 50) {
+    const chunk = sorted.slice(i, i + 50)
     const d = await qlooGet(
       '/v2/insights',
       { 'filter.type': domain.startsWith('urn:') ? domain : `urn:entity:${domain}`, ...signalParams(s), 'filter.results.entities': chunk.join(','), take: chunk.length },
       { ...ctx, stage: ctx.stage ?? 'fit' },
       `Fit of ${chunk.length} ${domain.replace('urn:entity:', '')}s`,
     )
-    for (const e of d.results?.entities ?? []) out.set(e.entity_id, e.query?.affinity ?? null)
+    for (const e of d.results?.entities ?? []) if (out.has(e.entity_id)) out.set(e.entity_id, e.query?.affinity ?? null) // never count IDs we didn't ask about
   }
   return out
 }
@@ -150,12 +180,6 @@ export async function setsApart(aIds: string[], bIds: string[], ctx: Ctx, take =
     .sort((x: any, y: any) => Number(y.query?.count ?? 0) - Number(x.query?.count ?? 0))
     .slice(0, take)
     .map(tagItem)
-}
-
-export async function entityDetails(ids: string[], ctx: Ctx): Promise<EvidenceItem[]> {
-  if (!ids.length) return []
-  const d = await qlooGet('/entities', { entity_ids: ids.join(',') }, ctx, `Details for ${ids.length} entities`)
-  return (Array.isArray(d.results) ? d.results : []).map(entityItem)
 }
 
 // Heatmap (prd.md > Agent Flow): affinity and popularity per geohash tile (~20–40 km) inside a location.

@@ -135,3 +135,10 @@ describe('targeting', () => {
     expect(budgetSplit([60])).toEqual([100])
   })
 })
+
+describe('lineTally sentences', () => {
+  it('keeps prices and abbreviations whole', async () => {
+    const { lineTally } = await import('../src/engine/summary.ts')
+    expect(lineTally('Only $4.99 in St. Louis today. Go now!', []).map((l) => l.text)).toEqual(['Only $4.99 in St. Louis today.', 'Go now!'])
+  })
+})

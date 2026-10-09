@@ -38,6 +38,7 @@ List every named reference (brands, artists, bands, songs' artists, venues and p
 Add up to 3 implied themes as music or style genres or keywords (e.g. "psychedelic rock", "vinyl", "tailgating").`,
     trace: ctx.trace,
     label: "Extract the ad's references",
+    stage: 'references',
   })
   const items = ex.references.filter((r, i, all) => all.findIndex((x) => x.text.toLowerCase() === r.text.toLowerCase()) === i).slice(0, 12)
 
@@ -61,6 +62,7 @@ Add up to 3 implied themes as music or style genres or keywords (e.g. "psychedel
     prompt: `The ad:\n"""\n${brief.adText}\n"""\n\nFor each reference, pick the candidate number that is the same thing, or null:\n${listed}`,
     trace: ctx.trace,
     label: 'Match references to Qloo entries',
+    stage: 'references',
   })
   const refs: Reference[] = items.map((r, i) => {
     const choice = picks.find((p) => p.ref === i + 1)?.choice
@@ -89,7 +91,7 @@ export const noSignal = (r: Reference) => Object.keys(r.fitBySegment).length > 0
 
 // Fit per audience. Entities: filter.results.entities (Qloo omits what an audience doesn't engage with → null).
 // Themes: the tag's affinity if it is among the audience's top 50 themes, else null meaning "unknown" (not counted).
-export async function scoreReferences(refs: Reference[], segments: Segment[], ctx: Ctx): Promise<Reference[]> {
+export async function scoreReferences(refs: Reference[], segments: Segment[], ctx: Ctx, opts = { skew: true }): Promise<Reference[]> {
   const c = { ...ctx, stage: 'fit' as const }
   const entities = refs.filter((r) => r.kind === 'entity' && !!r.qlooId && SCORABLE.has(domainOf(r)))
   const themes = refs.filter((r) => r.kind === 'theme' && r.qlooId)
@@ -110,7 +112,7 @@ export async function scoreReferences(refs: Reference[], segments: Segment[], ct
       return { seg, scores }
     }),
   )
-  const skews = new Map(await Promise.all(entities.slice(0, 8).map(async (r) => [r.qlooId!, await demographics(r.qlooId!, c).catch(() => null)] as const)))
+  const skews = new Map(await Promise.all((opts.skew ? entities.slice(0, 8) : []).map(async (r) => [r.qlooId!, await demographics(r.qlooId!, c).catch(() => null)] as const)))
   const out = refs.map((r) => ({
     ...r,
     fitBySegment: entities.includes(r) || themes.includes(r) ? Object.fromEntries(perSegment.map(({ seg, scores }) => [seg.id, scores.get(r.qlooId!) ?? null])) : {},

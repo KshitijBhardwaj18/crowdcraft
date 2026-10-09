@@ -36,6 +36,7 @@ Then call finish.`,
     maxSteps: 10,
     trace: ctx.trace,
     label: 'Agent maps the brief to Qloo signals',
+    stage: 'signals',
   })
   const { signals, dropped } = keepKnownIds({ ...result, locationId: null }, reg)
   if (dropped.length) ctx.trace?.add('signals', 'warning', `Dropped ${dropped.length} IDs the tools never returned`, { dropped })
@@ -72,13 +73,15 @@ Market: use the place the brief sets for the campaign or the event (e.g. "runs i
     prompt: text,
     trace,
     label: 'Structure the free-text brief',
+    stage: 'brief',
   })
   const missing = [!p.adText && 'the ad itself', !p.market.country && 'where it runs (market)', !p.target.text && 'who it is for (target audience)'].filter(
     (x): x is string => !!x,
   )
-  if (p.adText && !/^en\b/i.test(p.language)) return { brief: null, missing, warnings: [], error: `M1 judges English ads only (this one looks like "${p.language}").` }
-  if (p.adText && p.adText.length > 5000) return { brief: null, missing, warnings: [], error: `The ad is ${p.adText.length} characters; the limit is 5,000.` }
-  const warnings = p.adText && p.adText.trim().split(/\s+/).length < 10 ? ['The ad is under 10 words, so reactions will be thin.'] : []
+  if (p.adText && !p.language.trim().toLowerCase().startsWith('en')) return { brief: null, missing, warnings: [], error: `M1 judges English ads only (this one looks like "${p.language}").` }
+  const check = p.adText ? validateAd(p.adText) : { error: null, warnings: [] }
+  if (check.error) return { brief: null, missing, warnings: [], error: check.error }
+  const warnings = check.warnings
   if (missing.length) return { brief: null, missing, warnings, error: null }
   const brief: Brief = {
     adText: p.adText!,
@@ -90,4 +93,10 @@ Market: use the place the brief sets for the campaign or the event (e.g. "runs i
     unused: p.unused,
   }
   return { brief, missing, warnings, error: null }
+}
+
+// Length rules for every brief, from free text or a file (prd.md > States and Edge Cases).
+export function validateAd(adText: string): { error: string | null; warnings: string[] } {
+  if (adText.length > 5000) return { error: `The ad is ${adText.length} characters; the limit is 5,000.`, warnings: [] }
+  return { error: null, warnings: adText.trim().split(/\s+/).length < 10 ? ['The ad is under 10 words, so reactions will be thin.'] : [] }
 }

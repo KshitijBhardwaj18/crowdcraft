@@ -6,7 +6,7 @@
   "type": "module",
   "private": true,
   "engines": {
-    "node": ">=22"
+    "node": ">=22.9"
   },
   "scripts": {
     "cc": "tsx --env-file-if-exists=.env src/cli.ts",

@@ -178,7 +178,21 @@ export const Run = z.object({
   heat: z.array(z.object({ label: z.string(), heat: z.number(), role: z.enum(['hot', 'cool', 'other']) })).nullable().default(null),
   targeting: Targeting.nullable().default(null),
   // "Better versions": the ad rewritten for a recommended audience and re-judged on it (review.rankingScore = after).
-  versions: z.array(z.object({ segmentId: z.string(), adText: z.string(), usedTaste: z.array(z.string()), before: z.number(), review: Review })).default([]),
+  versions: z
+    .array(
+      z.object({
+        segmentId: z.string(),
+        adText: z.string(),
+        usedTaste: z.array(z.string()),
+        before: z.number(),
+        // The two parts of the score, before → after, shown separately: reference fit rises almost by construction when
+        // the rewrite uses the audience's own taste, so the judgement change is the honest signal (PR #5 review).
+        judgementBefore: z.number().nullable().default(null),
+        refFitBefore: z.number().nullable().default(null),
+        review: Review,
+      }),
+    )
+    .default([]),
   trace: z.array(TraceEvent),
   usage: Usage,
   errors: z.array(z.object({ stage: z.string(), message: z.string() })),

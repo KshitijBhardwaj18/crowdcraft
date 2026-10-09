@@ -97,10 +97,11 @@ ${brief.adText}
         label: `Rewrite the ad for ${seg.name}`,
       })
       const nb: Brief = { ...brief, adText: rw.adText }
-      const refs: Reference[] = await scoreReferences(await resolveReferences(nb, { trace }), segments, { trace })
+      // All audiences, so "no signal" means the same as for the original; no skew calls (the judge doesn't use them).
+      const refs: Reference[] = await scoreReferences(await resolveReferences(nb, { trace }), segments, { trace }, { skew: false })
       const review = await judge('crowdcraft', nb, seg, refs, trace)
-      trace.add('judge', 'decision', `Better version for ${seg.name}: ${orig.rankingScore} → ${review.rankingScore}`)
-      out.push({ segmentId: seg.id, adText: rw.adText, usedTaste: rw.usedTaste, before: orig.rankingScore, review })
+      trace.add('judge', 'decision', `Better version for ${seg.name}: ${orig.rankingScore} → ${review.rankingScore} (judgement ${orig.judgement} → ${review.judgement}, reference fit ${orig.refFit ?? '–'} → ${review.refFit ?? '–'})`)
+      out.push({ segmentId: seg.id, adText: rw.adText, usedTaste: rw.usedTaste, before: orig.rankingScore, judgementBefore: orig.judgement, refFitBefore: orig.refFit, review })
     } catch (e) {
       errors.push({ stage: 'judge', message: `Better version for ${seg.name} failed: ${(e as Error).message}` })
     }

@@ -78,9 +78,10 @@ export function segmentEvidence(seg: Segment, refs: Reference[] | null): Evidenc
   if (refs?.length) {
     // Only resolved entities are scored (Qloo omits what an audience doesn't engage with); themes count only when Qloo
     // places them among this audience's top themes. Unresolved references don't count (prd.md > States and Edge Cases).
-    const ents = refs.filter(isScoredEntity)
+    // Same rule as segmentRefFit: a reference with no entry for this audience is left out, not shown as 0.
+    const ents = refs.filter((r) => isScoredEntity(r) && seg.id in r.fitBySegment)
     if (ents.length) {
-      lines.push("How this crowd relates to the brands, places and artists the ad mentions (Qloo; 0 = no engagement, 100 = the strongest fit among the segments):")
+      lines.push("How this crowd relates to the brands, places and artists the ad mentions (Qloo affinity on an absolute 0-100 scale: 0 = no engagement, about 40 = typical, 100 = an exceptional fit):")
       ents.forEach((r, i) => {
         const none = r.fitBySegment[seg.id] == null ? " (this crowd doesn't engage with it)" : ''
         add('R', i, `ref:${r.qlooId}`, `"${r.text}" = ${r.resolvedName}: ${normFit(r, seg.id)}/100${none}`)
@@ -141,12 +142,18 @@ export function finalize(out: JudgeOutput, adText: string, aliases: Map<string, 
   const grounded = arm === 'crowdcraft' || arm === 'ablation'
   const dropped: Review['dropped'] = []
   const resolve = (ids: string[]) => [...new Set(ids.map((a) => aliases.get(a.replace(/[[\]\s]/g, ''))).filter((x): x is string => !!x))]
+  const invented = (ids: string[]) => ids.filter((a) => !aliases.has(a.replace(/[[\]\s]/g, '')))
 
   const reaction: Review['reaction'] = []
   for (const r of out.reaction) {
     const sourceIds = grounded ? resolve(r.sourceIds) : []
     if (grounded && !sourceIds.length) dropped.push({ kind: 'claim', text: r.sentence, reason: 'no valid taste source' })
-    else reaction.push({ sentence: r.sentence, sourceIds })
+    else {
+      reaction.push({ sentence: r.sentence, sourceIds })
+      // Kept on its valid sources, but record any invented ones so the eval can count them.
+      const bad = grounded ? invented(r.sourceIds) : []
+      if (bad.length) dropped.push({ kind: 'claim', text: r.sentence, reason: `kept; ignored invented sources ${bad.join(', ')}` })
+    }
   }
 
   const highlights: Highlight[] = []

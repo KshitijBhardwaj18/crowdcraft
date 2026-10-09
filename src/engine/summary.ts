@@ -8,12 +8,22 @@ export type LineTally = { text: string; start: number; end: number; lands: strin
 
 // Split the ad into lines, then sentences, keeping offsets; count which audiences each piece lands with or loses.
 export function lineTally(adText: string, reviews: Review[]): LineTally[] {
+  // A sentence ends at . ! ? followed by whitespace or the end of a line, so "$4.99" and "St. Louis" stay whole
+  // (ponytail: "St. Louis" only survives because a capital follows; fine for ad copy).
   const pieces: LineTally[] = []
-  for (const m of adText.matchAll(/[^.!?\n]+[.!?]*/g)) {
-    const text = m[0].trim()
-    if (!text) continue
-    const start = m.index! + m[0].indexOf(text)
-    pieces.push({ text, start, end: start + text.length, lands: [], loses: [] })
+  for (const m of adText.matchAll(/[^\n]+/g)) {
+    let from = 0
+    const line = m[0]
+    const ends = [...line.matchAll(/[.!?]+(?=\s|$)/g)].filter((e) => !/\b(St|Mr|Mrs|Ms|Dr|vs)\.$/.test(line.slice(0, e.index! + 1)))
+    for (const cut of [...ends.map((e) => e.index! + e[0].length), line.length]) {
+      const raw = line.slice(from, cut)
+      const text = raw.trim()
+      if (text) {
+        const start = m.index! + from + raw.indexOf(text)
+        pieces.push({ text, start, end: start + text.length, lands: [], loses: [] })
+      }
+      from = cut
+    }
   }
   for (const r of reviews)
     for (const h of r.highlights)
@@ -69,6 +79,7 @@ Recommended to target: ${targeting.audiences.map((a) => name(a.segmentId)).join(
 Don't target: ${targeting.skip.map((s) => `[${s.segmentId}] ${name(s.segmentId)}`).join(', ') || 'none'}`,
     trace,
     label: 'Decide what to fix',
+    stage: 'report',
   })
   const valid = new Set(segments.map((s) => s.id))
   const line = (l: string | null) => (l && locateQuote(brief.adText, l) ? l : null)

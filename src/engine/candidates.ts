@@ -51,6 +51,20 @@ export function regionLabel(disambiguation: string): string {
   return `${parts[0]}, ${country}`
 }
 
+// Is a Qloo locality ("Austin, Travis County, Texas, United States") inside the brief's market (country, and state if set)?
+const US = /^(us|usa|u\.s\.a?\.?|united states( of america)?)$/i
+export function inMarket(disambiguation: string, market: Brief['market']): boolean {
+  const parts = disambiguation.split(',').map((p) => p.trim().toLowerCase())
+  const country = parts.at(-1) ?? ''
+  const want = market.country.trim().toLowerCase()
+  const sameCountry = US.test(want) ? US.test(country) : country === want || country.includes(want) || want.includes(country)
+  if (!sameCountry) return false
+  if (!market.region) return true
+  const region = market.region.trim().toLowerCase()
+  const abbr = Object.entries(STATES).find(([, v]) => v.toLowerCase() === region)?.[0].toLowerCase()
+  return parts.slice(0, -1).some((p) => p === region || p === abbr)
+}
+
 const Out = z.object({
   regions: z.array(z.object({ locationQuery: z.string(), why: z.string().describe("How this place's taste likely differs from the others") })),
 })
@@ -68,12 +82,18 @@ Propose 6 to 8 cities or metro areas inside this market where people in the targ
     maxSteps: 14,
     trace: ctx.trace,
     label: 'Agent proposes regions to test in',
+    stage: 'candidates',
   })
   // Resolve every proposal in code too (the agent's checked spelling may differ from what it returns; cached calls).
   const resolved = await Promise.all(
     result.regions.map(async (r) => {
       const display = reg.localities.get(r.locationQuery.toLowerCase()) ?? (await locality(r.locationQuery, { ...ctx, stage: 'candidates' }))?.name
-      return display ? { query: r.locationQuery, label: regionLabel(display) } : null
+      if (!display) return null
+      if (!inMarket(display, brief.market)) {
+        ctx.trace?.add('candidates', 'warning', `${display}: outside the brief's market (${[brief.market.region, brief.market.country].filter(Boolean).join(', ')}), skipped`)
+        return null
+      }
+      return { query: r.locationQuery, label: regionLabel(display) }
     }),
   )
   const dropped = result.regions.filter((_, i) => !resolved[i]).map((r) => r.locationQuery)
@@ -84,7 +104,7 @@ Propose 6 to 8 cities or metro areas inside this market where people in the targ
 }
 
 // Keep the regions whose taste differs most (top artists and brands for the whole target), then cross with age bands.
-export async function buildCells(brief: Brief, base: QlooSignals, regions: Region[], ctx: Ctx, select = true): Promise<Candidate[]> {
+export async function buildCells(brief: Brief, base: QlooSignals, regions: Region[], ctx: Ctx, select = true, note: string | null = null): Promise<Candidate[]> {
   const bands = ageBands(brief.target.ageBuckets, regions.length <= 1 ? 4 : 2)
   let kept = regions
   if (select && regions.length > 1) {
@@ -92,7 +112,7 @@ export async function buildCells(brief: Brief, base: QlooSignals, regions: Regio
     const c = { ...ctx, stage: 'candidates' as const }
     const lists = await Promise.all(
       regions.map(async (r) => {
-        const s: QlooSignals = { ...base, locationQuery: r.query, locationId: null, ageBuckets: brief.target.ageBuckets }
+        const s: QlooSignals = { ...base, locationQuery: r.query, locationId: null, ageBuckets: brief.target.ageBuckets, gender: brief.target.gender }
         const [a, b] = await Promise.all([topEntities('artist', s, 15, c), topEntities('brand', s, 15, c)])
         return [...a, ...b].map((x) => x.qlooId)
       }),
@@ -107,7 +127,7 @@ export async function buildCells(brief: Brief, base: QlooSignals, regions: Regio
     bands.map((band) => ({
       name: `${r.label} · ${ageLabel(band)}`,
       signals: { ...base, locationQuery: r.query, locationId: null, ageBuckets: band, gender: brief.target.gender },
-      broadened: null,
+      broadened: note,
       region: r.label,
       ageBand: ageLabel(band),
     })),

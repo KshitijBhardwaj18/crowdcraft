@@ -99,20 +99,42 @@ export type Built = { segments: Segment[]; references: Reference[]; heat: Run['h
 export async function buildSegments(brief: Brief, trace: Trace, noCache = false): Promise<Built> {
   const ctx = { trace }
   const reg = newRegistry()
-  const replay = async <T extends object>(stage: string, key: unknown, fn: () => Promise<T>) => {
+  const replay = async <T extends object>(stage: string, key: unknown, fn: () => Promise<T>, keep?: (v: T) => boolean) => {
     const start = trace.events.length
-    const { value, cached } = await stageCache(stage, key, async () => ({ ...(await fn()), events: trace.events.slice(start) as TraceEvent[] }), noCache)
+    const { value, cached } = await stageCache(
+      stage,
+      key,
+      async () => ({ ...(await fn()), events: trace.events.slice(start) as TraceEvent[] }),
+      noCache,
+      keep as ((v: T & { events: TraceEvent[] }) => boolean) | undefined,
+    )
     if (cached) {
-      for (const e of value.events) trace.add(e.stage, e.kind, e.message, e.detail)
+      // Replayed events are labelled, so the trace never claims calls this run didn't make.
+      for (const e of value.events) trace.add(e.stage, e.kind, e.kind === 'qloo_call' || e.kind === 'llm_call' ? `${e.message} (replayed from cache)` : e.message, e.detail)
       trace.add(e0(stage), 'decision', `Reused cached ${stage} for this exact input (no Qloo calls)`)
     }
     return value
   }
   const e0 = (stage: string) => (stage === 'references' ? 'references' : 'select') as TraceEvent['stage']
 
-  const refsStage = await replay('references', { v: 3, ad: brief.adText, brand: brief.brandLine, city: brief.market.city }, async () => ({
-    references: await resolveReferences(brief, ctx),
-  }))
+  if (!/^(us|usa|united states)/i.test(brief.market.country)) {
+    trace.add('candidates', 'warning', `Market ${brief.market.country}: M1 is tuned for the US; check the coverage probe for this market before trusting results`)
+    console.log(`! Market ${brief.market.country}: M1 is tuned for the US; see the coverage probe (npm run cc -- probe).`)
+  }
+  // A failure finding references never stops the run: judging falls back to taste only (prd.md > States and Edge Cases).
+  const refsStage = await replay(
+    'references',
+    { v: 3, ad: brief.adText, brand: brief.brandLine, city: brief.market.city },
+    async () => {
+      try {
+        return { references: await resolveReferences(brief, ctx), failed: false }
+      } catch (e) {
+        trace.add('references', 'error', `Finding the ad's references failed (${(e as Error).message.slice(0, 160)}); judging on taste only`)
+        return { references: [] as Reference[], failed: true }
+      }
+    },
+    (v) => !v.failed,
+  )
   const seeds = refsStage.references.filter((r) => r.qlooId)
   const built = await replay('segments', { v: 4, market: brief.market, target: brief.target, seeds: seeds.map((r) => r.qlooId).sort() }, async () => {
     const { signals, understanding } = await briefToSignals(brief, ctx, reg)
@@ -121,8 +143,14 @@ export async function buildSegments(brief: Brief, trace: Trace, noCache = false)
     let chosen = false
     const city = brief.market.city
     const area = brief.market.region ?? (/^(us|usa|united states)$/i.test(brief.market.country) ? 'United States' : null)
+    let note: string | null = null
     if (city) {
-      regions = [{ query: city, label: regionLabel((await locality(city, { ...ctx, stage: 'candidates' }))?.name ?? city) }]
+      const found = await locality(city, { ...ctx, stage: 'candidates' })
+      if (!found) {
+        note = `"${city}" wasn't found in Qloo, so this taste may be national, not local`
+        trace.add('candidates', 'warning', note)
+      }
+      regions = [{ query: city, label: regionLabel(found?.name ?? city) }]
     } else if (area && /united states|^us/i.test(brief.market.country)) {
       const entityIds = seeds.filter(isScoredEntity).map((r) => r.qlooId!).slice(0, 5)
       const tagIds = entityIds.length ? [] : [...seeds.map((r) => r.qlooId!), ...signals.tagIds].filter((id) => id.startsWith('urn:tag')).slice(0, 5)
@@ -147,12 +175,15 @@ export async function buildSegments(brief: Brief, trace: Trace, noCache = false)
     }
     if (!regions.length) regions = await proposeRegions(brief, understanding, ctx, reg)
     if (!regions.length) throw new Error('No regions in this market resolved in Qloo; try naming cities in the brief.')
-    const cells = await buildCells(brief, signals, regions, ctx, !chosen)
+    const cells = await buildCells(brief, signals, regions, ctx, !chosen, note)
     const fps = await Promise.all(cells.map((c) => fingerprint(c, ctx)))
-    const { segments, overlap } = await describeSegments(fps, ctx, reg)
-    return { segments, overlap, heat }
+    const { segments, overlap, degraded } = await describeSegments(fps, ctx, reg)
+    return { segments, overlap, heat, degraded }
+  }, (v) => !v.degraded)
+  const references = await scoreReferences(refsStage.references, built.segments, ctx).catch((e: Error) => {
+    trace.add('fit', 'error', `Scoring the references failed (${e.message.slice(0, 160)}); judging on taste only`)
+    return [] as Reference[]
   })
-  const references = await scoreReferences(refsStage.references, built.segments, ctx)
   return { segments: built.segments, overlap: built.overlap, heat: built.heat, references }
 }
 

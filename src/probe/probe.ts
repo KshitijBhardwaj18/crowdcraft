@@ -11,7 +11,7 @@ import { Trace } from '../trace.ts'
 export { jaccard }
 
 type Config = { markets: { id: string; name: string; city: string }[]; tastes: { id: string; tagQuery: string }[]; ages: AgeBucket[]; domains: Domain[] }
-type Cell = { taste: string; age: AgeBucket; domain: Domain; ids: string[]; names: string[] }
+type Cell = { taste: string; age: AgeBucket; domain: Domain; ids: string[]; names: string[]; failed: boolean }
 export type MarketResult = {
   id: string
   name: string
@@ -38,7 +38,12 @@ export async function runProbe(log: (s: string) => void, configPath = 'probe/seg
   const trace = new Trace()
   const ctx = { trace, stage: 'fingerprints' as const }
   const tagIds = new Map<string, string>()
-  for (const t of cfg.tastes) tagIds.set(t.id, (await searchTags(t.tagQuery, ctx))[0]?.qlooId ?? '')
+  for (const t of cfg.tastes) {
+    const tag = (await searchTags(t.tagQuery, ctx))[0]
+    if (!tag) throw new Error(`Probe taste "${t.tagQuery}" didn't resolve to a Qloo tag; fix probe/segments.yaml.`)
+    tagIds.set(t.id, tag.qlooId)
+    log(`  taste "${t.tagQuery}" → ${tag.name} (${tag.qlooId})`)
+  }
 
   const cells = new Map<string, Cell[]>()
   await Promise.all(
@@ -52,8 +57,9 @@ export async function runProbe(log: (s: string) => void, configPath = 'probe/seg
                 locationQuery: m.city, locationId: null, ageBuckets: [age], gender: null,
                 audienceIds: [], tagIds: [tagIds.get(t.id)!].filter(Boolean), entityIds: [],
               }
-              const items = await topEntities(domain, s, 20, ctx).catch(() => [])
-              list.push({ taste: t.id, age, domain, ids: items.map((i) => i.qlooId), names: items.map((i) => i.name) })
+              // An API failure is not "no coverage": record it separately and keep it out of the metrics.
+              const items = await topEntities(domain, s, 20, ctx).catch(() => null)
+              list.push({ taste: t.id, age, domain, ids: items?.map((i) => i.qlooId) ?? [], names: items?.map((i) => i.name) ?? [], failed: !items })
             }),
           ),
         ),
@@ -66,9 +72,14 @@ export async function runProbe(log: (s: string) => void, configPath = 'probe/seg
   const us = cells.get('us') ?? []
   const find = (list: Cell[], c: Pick<Cell, 'taste' | 'age' | 'domain'>) =>
     list.find((x) => x.taste === c.taste && x.age === c.age && x.domain === c.domain)
+  const failedCount = [...cells.values()].flat().filter((c) => c.failed).length
+  if (failedCount) log(`! ${failedCount} probe queries failed (API errors); they are excluded from the metrics.`)
   const results: MarketResult[] = cfg.markets.map((m) => {
-    const list = cells.get(m.id)!
-    const local = m.id === 'us' ? null : avg(list.filter((c) => c.ids.length).map((c) => 1 - jaccard(c.ids, find(us, c)?.ids ?? [])))
+    const list = cells.get(m.id)!.filter((c) => !c.failed)
+    if (!list.length) throw new Error(`Every probe query for ${m.name} failed; check the Qloo key and quota.`)
+    // Compare with the US list only where the US list exists; an empty US list would make everything look "local".
+    const comparable = list.filter((c) => c.ids.length && (find(us, c)?.ids.length ?? 0) > 0)
+    const local = m.id === 'us' ? null : comparable.length ? avg(comparable.map((c) => 1 - jaccard(c.ids, find(us, c)!.ids))) : null
     const distinct = avg(
       cfg.domains.flatMap((d) => {
         const segs = list.filter((c) => c.domain === d && c.ids.length)
