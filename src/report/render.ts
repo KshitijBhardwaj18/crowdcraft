@@ -1,7 +1,7 @@
-// Run → one self-contained HTML page (prd.md > Run Report (HTML), Look and Feel): built for analysis, pleasant to show.
-// The verdict is set as a festival lineup (best-fitting crowd = headliner), then a segment grid with taste collages and
-// letter grades, then per-segment detail (reaction with sources, highlighted ad, baselines side by side), references, trace.
+// Run → one self-contained dashboard page (prd.md > Run Report (HTML)): the ad, KPIs, what to do, results by region and
+// age, and per-audience detail with sources and the no-Qloo comparison. Inline CSS and a few lines of JS; no framework.
 import type { Arm, Highlight, Reference, Review, Run, Segment } from '../contracts.ts'
+import { lineTally } from '../engine/summary.ts'
 
 export const esc = (s: unknown) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
@@ -9,11 +9,19 @@ export const esc = (s: unknown) =>
 export const grade = (score: number) => (score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 55 ? 'C' : score >= 40 ? 'D' : 'F')
 
 const ARM_LABEL: Record<Arm, string> = {
-  crowdcraft: 'CrowdCraft · Qloo-grounded',
-  ablation: 'Ablation · Qloo taste, no reference fit',
-  b1_named: 'B1 · Segment name only',
-  b2_invented: 'B2 · AI-invented persona',
+  crowdcraft: 'CrowdCraft (Qloo taste)',
+  ablation: 'Qloo taste, no reference fit',
+  b1_named: 'Generic AI: audience name only',
+  b2_invented: 'Generic AI: invented persona',
 }
+const CHANNEL: Record<string, string> = {
+  reel: 'Instagram / TikTok reel', preroll: 'YouTube pre-roll', tv: 'TV / streaming spot', audio: 'Radio / podcast', billboard: 'Billboard',
+  social: 'Social post', email: 'Email', general: 'General',
+}
+const VERDICT_RANK = { love: 4, like: 3, meh: 2, skip: 1 } as const
+const KIND = {
+  keep: ['Keep', 'k-keep'], fix: ['Fix', 'k-fix'], try: ['Try', 'k-try'], spend: ['Spend', 'k-spend'], skip: ['Skip', 'k-skip'],
+} as const
 const DOMAIN_LABEL: Record<string, string> = { artist: 'Artists', brand: 'Brands', tv_show: 'Shows', place: 'Places', movie: 'Films', podcast: 'Podcasts' }
 const domainOf = (type: string) => type.split(':').pop() ?? type
 
@@ -23,11 +31,10 @@ function sourceNames(run: Run, seg: Segment) {
   for (const r of run.references) if (r.qlooId) m.set(`ref:${r.qlooId}`, `“${r.text}”`)
   return m
 }
-
 const chips = (ids: string[], names: Map<string, string>) =>
-  ids.map((id) => `<span class="src" title="Qloo source: ${esc(id)}">${esc(names.get(id) ?? id)}</span>`).join('')
+  ids.map((id) => `<span class="src" title="Qloo source ${esc(id)}">${esc(names.get(id) ?? id)}</span>`).join('')
 
-function highlightedAd(ad: string, hs: Highlight[], names: Map<string, string>) {
+function highlightedAd(ad: string, hs: Highlight[], names: Map<string, string>, cls = '') {
   let out = ''
   let pos = 0
   for (const h of [...hs].sort((a, b) => a.start - b.start)) {
@@ -36,258 +43,294 @@ function highlightedAd(ad: string, hs: Highlight[], names: Map<string, string>) 
     out += esc(ad.slice(pos, h.start)) + `<mark class="${h.effect}" title="${esc(why)}" tabindex="0">${esc(ad.slice(h.start, h.end))}</mark>`
     pos = h.end
   }
-  return `<pre class="ad">${out + esc(ad.slice(pos))}</pre>`
+  return `<pre class="script ${cls}">${out + esc(ad.slice(pos))}</pre>`
 }
 
-function collage(seg: Segment) {
-  const items = seg.fingerprint.slice().sort((a, b) => Number(!!b.imageUrl) - Number(!!a.imageUrl)).slice(0, 5)
-  if (!items.length) return `<div class="collage empty"><span>No taste data</span></div>`
-  return `<div class="collage n${items.length}">${items
-    .map(
-      (f, i) =>
-        `<figure class="tile t${i}" title="${esc(f.name)} · ${esc(DOMAIN_LABEL[domainOf(f.type)] ?? domainOf(f.type))}">${
-          f.imageUrl ? `<img src="${esc(f.imageUrl)}" alt="${esc(f.name)}" loading="lazy" referrerpolicy="no-referrer">` : ''
-        }<figcaption>${esc(f.name)}</figcaption></figure>`,
-    )
-    .join('')}</div>`
-}
+const pill = (r: Review) => `<span class="verdict v-${r.verdict}">${esc(r.verdict)}</span>`
+const gradeBadge = (score: number) => `<span class="grade g-${grade(score)}">${grade(score)}</span>`
 
-function lineup(run: Run, ranked: Review[]) {
-  const name = (id: string) => run.segments.find((s) => s.id === id)?.name ?? id
-  const tiers = [ranked.slice(0, 1), ranked.slice(1, 3), ranked.slice(3)]
-  return `<section class="lineup" aria-label="Segments ranked by fit">
-  <p class="kicker">The lineup · ranked by how hard each crowd shows up</p>
-  ${tiers
-    .filter((t) => t.length)
-    .map(
-      (t, i) =>
-        `<p class="row r${i}">${t
-          .map((r) => `<a href="#seg-${esc(r.segmentId)}" class="act v-${r.verdict}"><span class="g">${grade(r.rankingScore)}</span>${esc(name(r.segmentId))}</a>`)
-          .join('<span class="dot" aria-hidden="true">✦</span>')}</p>`,
-    )
-    .join('')}
-  <p class="verdict-line">${esc(run.verdictLine)}</p>
+function kpis(run: Run, lead: Review[], name: (id: string) => string) {
+  if (!lead.length) return ''
+  const avg = Math.round(lead.reduce((s, r) => s + r.rankingScore, 0) / lead.length)
+  const best = lead[0]
+  const worst = lead.at(-1)!
+  const positive = lead.filter((r) => r.verdict === 'love' || r.verdict === 'like').length
+  const love = lead.filter((r) => r.verdict === 'love').length
+  return `<section class="kpis">
+  <div class="kpi"><p class="kpi-k">Overall fit</p><p class="kpi-v">${avg}${gradeBadge(avg)}</p><p class="kpi-s">average across ${lead.length} audiences</p></div>
+  <div class="kpi"><p class="kpi-k">Best audience</p><p class="kpi-v sm">${esc(name(best.segmentId))}</p><p class="kpi-s">${pill(best)} ${best.rankingScore} · ${esc(best.wouldAct)}</p></div>
+  <div class="kpi"><p class="kpi-k">Weakest audience</p><p class="kpi-v sm">${esc(name(worst.segmentId))}</p><p class="kpi-s">${pill(worst)} ${worst.rankingScore} · ${esc(worst.wouldAct)}</p></div>
+  <div class="kpi"><p class="kpi-k">Positive response</p><p class="kpi-v">${positive}<span class="of">/${lead.length}</span></p><p class="kpi-s">${love} love it · ${positive - love} like it</p></div>
 </section>`
 }
 
-function card(run: Run, seg: Segment, r: Review | undefined, i: number) {
-  const quote = r?.reaction[0]?.sentence
-  return `<a class="card" href="#seg-${esc(seg.id)}" style="--i:${i}">
-  ${collage(seg)}
-  <div class="card-body">
-    <div class="card-top">
-      <span class="grade v-${r?.verdict ?? 'meh'}">${r ? grade(r.rankingScore) : '–'}</span>
-      <div><h3>${esc(seg.name)}</h3><p class="meta">${r ? `<b class="v-${r.verdict}">${esc(r.verdict)}</b> · ${esc(r.wouldAct)}` : 'not judged'}</p></div>
-    </div>
-    ${r ? `<div class="meter" role="img" aria-label="Ranking score ${r.rankingScore} of 100"><span style="width:${r.rankingScore}%"></span><b>${r.rankingScore}</b></div>` : ''}
-    ${quote ? `<blockquote>“${esc(quote)}”</blockquote>` : ''}
-    ${seg.confidence === 'normal' ? '' : `<p class="flag">${esc(seg.confidence)}: ${esc(seg.confidenceNote ?? '')}</p>`}
-  </div>
-</a>`
+function scriptPanel(run: Run, lead: Review[], name: (id: string) => string) {
+  const n = new Set(lead.map((r) => r.segmentId)).size
+  const lines = lineTally(run.brief.adText, lead)
+  return `<section class="panel">
+  <header class="ph"><h2>The ad, line by line</h2><p class="muted">${esc(run.brief.adType === 'script' ? 'Script' : 'Ad copy')} · how many of the ${n} audiences each line lands with or loses</p></header>
+  <ol class="lines">${lines
+    .map((l) => {
+      const tip = `Lands: ${l.lands.map(name).join(', ') || 'none'}\nLoses: ${l.loses.map(name).join(', ') || 'none'}`
+      const tone = l.loses.length > l.lands.length ? 'neg' : l.lands.length ? 'pos' : 'neu'
+      return `<li class="line ${tone}" title="${esc(tip)}"><span class="lt">${esc(l.text)}</span><span class="lc">${
+        n ? `<span class="bars"><span class="bl" style="width:${(l.lands.length / n) * 100}%"></span><span class="bx" style="width:${(l.loses.length / n) * 100}%"></span></span>` : ''
+      }<span class="nums">${l.lands.length ? `<b class="up">+${l.lands.length}</b>` : ''}${l.loses.length ? `<b class="down">−${l.loses.length}</b>` : ''}${!l.lands.length && !l.loses.length ? '<span class="muted">—</span>' : ''}</span></span></li>`
+    })
+    .join('')}</ol>
+</section>`
 }
 
-function reviewBlock(run: Run, seg: Segment, r: Review, main: boolean) {
-  const names = sourceNames(run, seg)
-  const unsourced = r.arm === 'b1_named' || r.arm === 'b2_invented'
-  return `<div class="review ${main ? 'main' : ''}">
-  <p class="arm">${esc(ARM_LABEL[r.arm])}</p>
-  <p class="rv"><span class="grade sm v-${r.verdict}">${grade(r.rankingScore)}</span><b class="v-${r.verdict}">${esc(r.verdict)}</b> <span class="muted">· ${esc(r.wouldAct)} · ${r.rankingScore}</span></p>
-  <ul class="reaction">${r.reaction.map((s) => `<li>${esc(s.sentence)} ${unsourced ? '<span class="src none">unsourced</span>' : chips(s.sourceIds, names)}</li>`).join('')}</ul>
-  ${main ? '' : highlightedAd(run.brief.adText, r.highlights, names)}
-  <details class="small"><summary>How this was scored${r.dropped.length ? ` · ${r.dropped.length} dropped` : ''}</summary>
-    <p>Judgement ${r.judgement}/100${r.refFit == null ? '' : ` · reference fit ${r.refFit}/100 · ranking = 0.4 × fit + 0.6 × judgement`}</p>
-    ${r.dropped.map((d) => `<p class="dropped">Dropped ${esc(d.kind)} “${esc(d.text)}”: ${esc(d.reason)}</p>`).join('')}
-    ${r.inventedPersona ? `<p><b>The persona B2 invented:</b> ${esc(r.inventedPersona.bio)} <i>Favourites:</i> ${esc(r.inventedPersona.favourites.map((f) => f.name).join(', '))}</p>` : ''}
-  </details>
-</div>`
+function actionsPanel(run: Run, name: (id: string) => string) {
+  const s = run.summary
+  if (!s) return `<section class="panel"><header class="ph"><h2>What to do</h2></header><p class="muted">No summary for this run (needs the Qloo-grounded reviews).</p></section>`
+  const order = ['spend', 'keep', 'fix', 'try', 'skip']
+  return `<section class="panel">
+  <header class="ph"><h2>What to do</h2></header>
+  <p class="bottom-line">${esc(s.bottomLine)}</p>
+  <ul class="actions">${s.actions
+    .slice()
+    .sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind))
+    .map(
+      (a) =>
+        `<li><span class="kind ${KIND[a.kind][1]}">${KIND[a.kind][0]}</span><div><p>${esc(a.text)}</p>${a.quote ? `<p class="q">“${esc(a.quote)}”</p>` : ''}${
+          a.segmentIds.length ? `<p class="tags">${a.segmentIds.map((id) => `<a href="#row-${esc(id)}" class="tag" data-open="${esc(id)}">${esc(name(id))}</a>`).join('')}</p>` : ''
+        }</div></li>`,
+    )
+    .join('')}</ul>
+</section>`
 }
 
-function detail(run: Run, seg: Segment) {
+function heatmap(run: Run, lead: Review[]) {
+  const segs = run.segments.filter((s) => s.region && s.ageBand)
+  const regions = [...new Set(segs.map((s) => s.region!))]
+  const ages = [...new Set(segs.map((s) => s.ageBand!))]
+  if (regions.length < 1 || ages.length < 1 || segs.length < 2) return ''
+  const cell = (region: string, age: string) => {
+    const seg = segs.find((s) => s.region === region && s.ageBand === age)
+    const r = seg && lead.find((x) => x.segmentId === seg.id)
+    if (!seg || !r) return '<td class="hm-empty">—</td>'
+    return `<td><a href="#row-${esc(seg.id)}" data-open="${esc(seg.id)}" class="hm" style="--s:${r.rankingScore}"><b>${r.rankingScore}</b><span>${grade(r.rankingScore)} · ${esc(r.verdict)}</span></a></td>`
+  }
+  return `<div class="heat"><p class="kpi-k">Fit by region and age</p><table class="hmt"><thead><tr><th></th>${ages.map((a) => `<th>${esc(a)}</th>`).join('')}</tr></thead><tbody>${regions
+    .map((rg) => `<tr><th>${esc(rg)}</th>${ages.map((a) => cell(rg, a)).join('')}</tr>`)
+    .join('')}</tbody></table></div>`
+}
+
+function detailRow(run: Run, seg: Segment, lead: Review | undefined) {
   const by = (a: Arm) => run.reviews.find((r) => r.segmentId === seg.id && r.arm === a)
-  const main = by('crowdcraft') ?? by('ablation') ?? by('b1_named') ?? by('b2_invented')
-  const others = (['ablation', 'b1_named', 'b2_invented'] as Arm[]).map(by).filter((r): r is Review => !!r && r !== main)
   const names = sourceNames(run, seg)
+  const others = (['b1_named', 'b2_invented', 'ablation'] as Arm[]).map(by).filter((r): r is Review => !!r && r !== lead)
   const groups = new Map<string, Segment['fingerprint']>()
   for (const f of seg.fingerprint) groups.set(domainOf(f.type), [...(groups.get(domainOf(f.type)) ?? []), f])
-  return `<section class="detail" id="seg-${esc(seg.id)}">
-  <header><p class="kicker"><a href="#grid">↑ All segments</a></p><h2>${esc(seg.name)}</h2><p class="muted">${esc(seg.definedBy.join(' · '))}</p></header>
-  <div class="detail-grid">
-    <div>
-      <h4>What this crowd loves more than the others <span class="muted">(Qloo)</span></h4>
-      ${[...groups]
-        .map(
-          ([d, fs]) =>
-            `<p class="fp"><span class="fp-k">${esc(DOMAIN_LABEL[d] ?? d)}</span>${fs
-              .map((f) => `<span class="fp-i" title="affinity ${f.affinity?.toFixed(3) ?? 'n/a'} · +${f.distinctiveness.toFixed(2)} vs the other segments">${esc(f.name)}</span>`)
-              .join('')}</p>`,
-        )
-        .join('')}
-      ${seg.themes.length ? `<p class="fp"><span class="fp-k">Themes</span>${seg.themes.map((t) => `<span class="fp-i">${esc(t.name)}</span>`).join('')}</p>` : ''}
-      ${seg.setsApart.length ? `<p class="fp"><span class="fp-k">Sets apart</span>${seg.setsApart.map((t) => `<span class="fp-i">${esc(t.name)}</span>`).join('')}</p>` : ''}
-      ${main ? `<h4>Their read of the ad</h4>${highlightedAd(run.brief.adText, main.highlights, names)}<p class="legend"><mark class="lands">lands</mark> <mark class="loses">loses them</mark> · hover for why</p>` : ''}
-    </div>
-    <div>${main ? reviewBlock(run, seg, main, true) : '<p class="muted">Not judged.</p>'}</div>
+  return `<tr class="detail" id="detail-${esc(seg.id)}" hidden><td colspan="7"><div class="dgrid">
+  <div>
+    <p class="dk">What they said</p>
+    ${lead ? `<p class="dv">${pill(lead)} <span class="muted">${esc(lead.wouldAct)}</span></p><ul class="reaction">${lead.reaction
+      .map((s) => `<li>${esc(s.sentence)} ${lead.arm === 'b1_named' || lead.arm === 'b2_invented' ? '<span class="src none">unsourced</span>' : chips(s.sourceIds, names)}</li>`)
+      .join('')}</ul>` : '<p class="muted">Not judged.</p>'}
+    <p class="dk">Their taste (Qloo): what they love more than the other audiences</p>
+    ${[...groups]
+      .map(([d, fs]) => `<p class="fp"><span class="fpk">${esc(DOMAIN_LABEL[d] ?? d)}</span>${fs.map((f) => `<span class="fpi" title="+${f.distinctiveness.toFixed(2)} vs the other audiences">${f.imageUrl ? `<img src="${esc(f.imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}${esc(f.name)}</span>`).join('')}</p>`)
+      .join('')}
+    ${seg.themes.length ? `<p class="fp"><span class="fpk">Themes</span>${seg.themes.map((t) => `<span class="fpi">${esc(t.name)}</span>`).join('')}</p>` : ''}
+    ${seg.setsApart.length ? `<p class="fp"><span class="fpk">Stands out</span>${seg.setsApart.map((t) => `<span class="fpi">${esc(t.name)}</span>`).join('')}</p>` : ''}
+    ${lead?.dropped.length ? `<details class="small"><summary>${lead.dropped.length} unsourced claims dropped</summary>${lead.dropped.map((d) => `<p class="dropped">${esc(d.text)} (${esc(d.reason)})</p>`).join('')}</details>` : ''}
   </div>
-  ${others.length ? `<h4 class="vs">Same ad, same crowd, without Qloo</h4><div class="others">${others.map((r) => reviewBlock(run, seg, r, false)).join('')}</div>` : ''}
+  <div>
+    <p class="dk">Their read of the ad <span class="muted">· <mark class="lands">lands</mark> <mark class="loses">loses them</mark> · hover for why</span></p>
+    ${lead ? highlightedAd(run.brief.adText, lead.highlights, names) : ''}
+    ${others.length ? `<p class="dk">Same audience without Qloo</p>${others
+      .map((o) => `<div class="cmp"><p><span class="muted">${esc(ARM_LABEL[o.arm])}</span> ${pill(o)} <span class="muted">${o.rankingScore}</span></p><p class="cmp-t">${esc(o.reaction.map((s) => s.sentence).join(' '))}</p></div>`)
+      .join('')}` : ''}
+    ${lead ? `<p class="small muted">Score ${lead.rankingScore} = ${lead.refFit == null ? `judgement ${lead.judgement}` : `0.4 × reference fit ${lead.refFit} + 0.6 × judgement ${lead.judgement}`}</p>` : ''}
+  </div>
+</div></td></tr>`
+}
+
+function resultsTable(run: Run, lead: Review[]) {
+  const leadFor = (id: string) => lead.find((r) => r.segmentId === id)
+  const segs = run.segments.slice().sort((a, b) => (leadFor(b.id)?.rankingScore ?? -1) - (leadFor(a.id)?.rankingScore ?? -1))
+  const rows = segs
+    .map((s) => {
+      const r = leadFor(s.id)
+      const into = s.fingerprint.slice(0, 3)
+      return `<tr class="row" id="row-${esc(s.id)}" data-id="${esc(s.id)}" data-region="${esc(s.region ?? s.name)}" data-age="${esc(s.ageBand ?? '')}" data-score="${r?.rankingScore ?? -1}" data-verdict="${r ? VERDICT_RANK[r.verdict] : 0}" tabindex="0" aria-expanded="false">
+  <td><b>${esc(s.region ?? s.name)}</b>${s.confidence === 'normal' ? '' : ` <span class="warn" title="${esc(s.confidenceNote)}">${esc(s.confidence)} data</span>`}</td>
+  <td>${esc(s.ageBand ?? '—')}</td>
+  <td>${r ? `<span class="fit">${gradeBadge(r.rankingScore)}<span class="meter"><span style="width:${r.rankingScore}%"></span></span><b>${r.rankingScore}</b></span>` : '—'}</td>
+  <td>${r ? pill(r) : '—'}</td>
+  <td class="act">${esc(r?.wouldAct ?? '')}</td>
+  <td class="into">${into.map((f) => `<span class="mini">${f.imageUrl ? `<img src="${esc(f.imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}${esc(f.name)}</span>`).join('')}</td>
+  <td class="chev" aria-hidden="true">›</td>
+</tr>${detailRow(run, s, r)}`
+    })
+    .join('')
+  return `<section class="panel">
+  <header class="ph row-h"><div><h2>Results by audience</h2><p class="muted">Click a row for what they said, their taste and the comparison without Qloo. Click a column to sort.</p></div>${heatmap(run, lead)}</header>
+  <div class="scroll"><table class="results"><thead><tr>
+    <th data-sort="region">Region</th><th data-sort="age">Age</th><th data-sort="score" class="sorted">Fit</th><th data-sort="verdict">Verdict</th><th>Would act</th><th>Into (Qloo)</th><th></th>
+  </tr></thead><tbody>${rows}</tbody></table></div>
 </section>`
 }
 
-function referencesTable(run: Run) {
-  if (!run.references.length) return '<p class="muted">No named references found in the ad.</p>'
+function referencesPanel(run: Run) {
+  if (!run.references.length) return ''
   const head = run.segments.map((s) => `<th>${esc(s.name)}</th>`).join('')
   const rows = run.references.map((r: Reference) => {
     const cells = run.segments
       .map((s) => {
         const v = r.fitBySegment[s.id]
-        return `<td>${r.qlooId ? (v == null ? '<span class="muted">no engagement</span>' : `<span class="bar" style="--w:${Math.round(v * 100)}%"></span>${v.toFixed(3)}`) : ''}</td>`
+        return `<td>${r.qlooId ? (v == null ? '<span class="muted">none</span>' : v.toFixed(2)) : ''}</td>`
       })
       .join('')
-    const skew = r.skew
-      ? Object.entries(r.skew.age)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 2)
-          .map(([k, v]) => `${k.replace(/_/g, ' ')} ${v > 0 ? '+' : ''}${v.toFixed(2)}`)
-          .join(', ')
-      : ''
-    return `<tr><td>“${esc(r.text)}”<br><span class="muted">${r.qlooId ? `${esc(r.resolvedName)} · ${esc(domainOf(r.qlooType ?? ''))}` : 'not in Qloo'}</span></td>${cells}<td class="muted">${esc(skew)}</td></tr>`
+    return `<tr><td>“${esc(r.text)}”<br><span class="muted small">${r.qlooId ? `${esc(r.resolvedName)} · ${esc(domainOf(r.qlooType ?? ''))}` : 'not in Qloo'}</span></td>${cells}</tr>`
   })
-  return `<div class="scroll"><table><thead><tr><th>Reference</th>${head}<th>Skews to</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
+  return `<section class="panel"><header class="ph"><h2>References in the ad</h2><p class="muted">How much each audience engages with the brands, places and artists the ad mentions (Qloo affinity)</p></header>
+<div class="scroll"><table><thead><tr><th>Reference</th>${head}</tr></thead><tbody>${rows.join('')}</tbody></table></div></section>`
 }
 
 export function renderReport(run: Run): string {
   const main = run.reviews.filter((r) => r.arm === 'crowdcraft')
-  const lead = (main.length ? main : run.reviews.filter((r) => r.arm === run.reviews[0]?.arm)).slice().sort((a, b) => b.rankingScore - a.rankingScore)
-  const leadFor = (id: string) => lead.find((r) => r.segmentId === id)
-  const ordered = run.segments.slice().sort((a, b) => (leadFor(b.id)?.rankingScore ?? -1) - (leadFor(a.id)?.rankingScore ?? -1))
-  const understood = run.trace.find((e) => e.stage === 'signals' && e.kind === 'decision')?.message.replace(/^Understood the audience as: /, '')
+  const arm = main.length ? 'crowdcraft' : run.reviews[0]?.arm
+  const lead = run.reviews.filter((r) => r.arm === arm).sort((a, b) => b.rankingScore - a.rankingScore)
+  const name = (id: string) => run.segments.find((s) => s.id === id)?.name ?? id
   const b = run.brief
+  const understood = run.trace.find((e) => e.stage === 'signals' && e.kind === 'decision')?.message.replace(/^Understood the audience as: /, '')
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CrowdCraft Run Report</title>
+<title>CrowdCraft · ${esc(b.brandLine ?? 'Run')}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Fraunces:opsz,wght@9..144,400;9..144,700;9..144,900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-<style>${CSS}${REPORT_CSS}</style></head><body><main>
-<header class="mast">
-  <p class="eyebrow">CrowdCraft · run report · ${esc(run.createdAt.slice(0, 16).replace('T', ' '))}</p>
-  <p class="brand">${esc(b.brandLine ?? 'Untitled ad')}</p>
-  <p class="muted">${esc(b.adType === 'script' ? 'Script' : 'Ad copy')} · ${esc(b.channel)} · ${esc([b.market.city, b.market.region, b.market.country].filter(Boolean).join(', '))} · for ${esc(b.target.text)}</p>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>${CSS}${DASH_CSS}</style></head><body>
+<nav class="appbar"><span class="logo"><span class="mark">◆</span> CrowdCraft</span><span class="crumb">Ad tests / <b>${esc(b.brandLine?.split(',')[0] ?? 'Run')}</b></span><span class="spacer"></span><span class="badge">Directional, not guaranteed</span><span class="muted small">${esc(run.createdAt.slice(0, 16).replace('T', ' '))}</span></nav>
+<main>
+<header class="page-h">
+  <h1>${esc(b.brandLine ?? 'Untitled ad')}</h1>
+  <p class="meta"><span class="m">${esc(CHANNEL[b.channel] ?? b.channel)}</span><span class="m">${esc(b.adType === 'script' ? 'Script' : 'Ad copy')}</span><span class="m">${esc([b.market.city, b.market.region, b.market.country].filter(Boolean).join(', '))}</span><span class="m">Target: ${esc(b.target.text)}</span></p>
+  ${understood ? `<p class="muted small">Agent's read of the audience: ${esc(understood)}</p>` : ''}
+  ${b.unused.length ? `<p class="muted small">Not used: ${b.unused.map((u) => `${esc(u.phrase)} (${esc(u.reason)})`).join('; ')}</p>` : ''}
 </header>
-${lead.length ? lineup(run, lead) : ''}
-<p class="note">Directional, not guaranteed. Every Qloo-grounded claim cites the taste data it came from.${understood ? ` The agent read the audience as: <i>${esc(understood)}</i>` : ''}</p>
 ${run.errors.length ? `<div class="errors">${run.errors.map((e) => `<p>⚠ ${esc(e.stage)}: ${esc(e.message)}</p>`).join('')}</div>` : ''}
-${b.unused.length ? `<p class="note">Not used: ${b.unused.map((u) => `<b>${esc(u.phrase)}</b> (${esc(u.reason)})`).join('; ')}</p>` : ''}
-
-<h2 class="sec" id="grid">The crowds</h2>
-<div class="grid">${ordered.map((s, i) => card(run, s, leadFor(s.id), i)).join('')}</div>
-
-<h2 class="sec">Up close</h2>
-${ordered.map((s) => detail(run, s)).join('')}
-
-<h2 class="sec">The ad's references in Qloo</h2>
-${referencesTable(run)}
-
-<h2 class="sec">How the agent worked</h2>
-<details class="trace-box"><summary>${run.trace.length} steps · ${run.usage.qlooCalls} Qloo calls · ${run.usage.llmCalls} LLM calls · $${run.usage.costUsd.toFixed(4)} · ${(run.usage.ms / 1000).toFixed(0)}s</summary>
+${kpis(run, lead, name)}
+<div class="two">${scriptPanel(run, lead, name)}${actionsPanel(run, name)}</div>
+${resultsTable(run, lead)}
+${referencesPanel(run)}
+<section class="panel"><details><summary><b>How the agent worked</b> <span class="muted">· ${run.trace.length} steps · ${run.usage.qlooCalls} Qloo calls · ${run.usage.llmCalls} AI calls · $${run.usage.costUsd.toFixed(4)} · ${(run.usage.ms / 1000).toFixed(0)}s</span></summary>
 <ol class="trace">${run.trace
-    .map(
-      (e) =>
-        `<li class="k-${e.kind}"><span class="t">${(e.t / 1000).toFixed(1)}s</span><span class="stage">${esc(e.stage)}</span>${esc(e.message)}${
-          e.detail ? `<details><summary>detail</summary><pre>${esc(JSON.stringify(e.detail, null, 2))}</pre></details>` : ''
-        }</li>`,
-    )
-    .join('')}</ol></details>
-<footer><p class="muted">CrowdCraft · taste data from Qloo · reviews by ${esc('Muse Spark')} · results are directional, not guaranteed.</p></footer>
-</main></body></html>`
+    .map((e) => `<li class="k-${e.kind}"><span class="t">${(e.t / 1000).toFixed(1)}s</span><span class="stage">${esc(e.stage)}</span>${esc(e.message)}</li>`)
+    .join('')}</ol></details></section>
+<footer class="muted small">CrowdCraft · audience taste from Qloo · reviews simulated by AI from that taste data · directional, not guaranteed</footer>
+</main>
+<script>${JS}</script>
+</body></html>`
 }
 
-// Shared base styles (also used by the eval scorecard and the coverage probe pages).
+const JS = `
+const open = (id, scroll) => {
+  const row = document.getElementById('row-' + id), d = document.getElementById('detail-' + id)
+  if (!row || !d) return
+  const show = d.hidden
+  d.hidden = !show; row.setAttribute('aria-expanded', String(show)); row.classList.toggle('open', show)
+  if (show && scroll) row.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+document.querySelectorAll('tr.row').forEach((r) => {
+  r.addEventListener('click', () => open(r.dataset.id))
+  r.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(r.dataset.id) } })
+})
+document.querySelectorAll('[data-open]').forEach((a) => a.addEventListener('click', (e) => {
+  e.preventDefault(); const d = document.getElementById('detail-' + a.dataset.open); if (d && d.hidden) open(a.dataset.open, true); else document.getElementById('row-' + a.dataset.open)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}))
+document.querySelectorAll('th[data-sort]').forEach((th) => th.addEventListener('click', () => {
+  const key = th.dataset.sort, tbody = th.closest('table').tBodies[0]
+  const desc = th.classList.contains('sorted') && !th.classList.contains('desc') ? false : key === 'score' || key === 'verdict'
+  const asc = th.classList.contains('sorted') ? th.classList.contains('desc') : !desc
+  const pairs = [...tbody.querySelectorAll('tr.row')].map((r) => [r, r.nextElementSibling])
+  pairs.sort(([a], [b]) => { const x = a.dataset[key], y = b.dataset[key]; const c = isNaN(+x) || isNaN(+y) ? x.localeCompare(y) : +x - +y; return asc ? c : -c })
+  pairs.forEach(([r, d]) => tbody.append(r, d))
+  th.parentElement.querySelectorAll('th').forEach((h) => h.classList.remove('sorted', 'desc'))
+  th.classList.add('sorted'); if (!asc) th.classList.add('desc')
+}))
+`
+
+// Shared base styles (the eval scorecard and coverage probe pages use them too).
 export const CSS = `
-:root{--paper:#f3ede2;--ink:#17140f;--muted:#6f675b;--card:#fbf8f2;--line:#d9cfbe;--accent:#e8442a;--love:#1d7a45;--like:#2f6f86;--meh:#8a8173;--skip:#c4321c;--lands:#bfe8c9;--loses:#f6c7bd;--chip:#e9e1d2;--shadow:0 1px 0 rgba(23,20,15,.06),0 12px 28px -18px rgba(23,20,15,.35)}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--paper:#14120e;--ink:#f1eadc;--muted:#a59b8a;--card:#1d1a15;--line:#3a342b;--accent:#ff6a4d;--love:#5cc58a;--like:#6ab6cc;--meh:#a59b8a;--skip:#ff6a4d;--lands:#1f4a2f;--loses:#5c2219;--chip:#2a251e;--shadow:0 1px 0 rgba(0,0,0,.4),0 14px 30px -18px rgba(0,0,0,.8)}}
-:root[data-theme=dark]{--paper:#14120e;--ink:#f1eadc;--muted:#a59b8a;--card:#1d1a15;--line:#3a342b;--accent:#ff6a4d;--love:#5cc58a;--like:#6ab6cc;--meh:#a59b8a;--skip:#ff6a4d;--lands:#1f4a2f;--loses:#5c2219;--chip:#2a251e}
+:root{--bg:#f5f6f8;--surface:#ffffff;--ink:#0d1321;--muted:#5f6b7a;--line:#e3e7ed;--soft:#f0f2f5;--accent:#0b7a75;--accent-soft:#e3f2f1;--love:#15803d;--like:#0e7490;--meh:#6b7280;--skip:#c2410c;--lands:#dcfce7;--loses:#ffe4d6;--shadow:0 1px 2px rgba(13,19,33,.05),0 4px 16px -8px rgba(13,19,33,.12)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0c0f14;--surface:#141922;--ink:#e8ecf2;--muted:#8d98a8;--line:#252c38;--soft:#1b212b;--accent:#2dd4bf;--accent-soft:#12302d;--love:#4ade80;--like:#22d3ee;--meh:#9ca3af;--skip:#fb923c;--lands:#14361f;--loses:#3d2213;--shadow:0 1px 2px rgba(0,0,0,.4)}}
+:root[data-theme=dark]{--bg:#0c0f14;--surface:#141922;--ink:#e8ecf2;--muted:#8d98a8;--line:#252c38;--soft:#1b212b;--accent:#2dd4bf;--accent-soft:#12302d;--love:#4ade80;--like:#22d3ee;--meh:#9ca3af;--skip:#fb923c;--lands:#14361f;--loses:#3d2213}
 *{box-sizing:border-box}html{scroll-behavior:smooth}
-body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 "Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.35;background-image:radial-gradient(rgba(23,20,15,.07) 1px,transparent 1px);background-size:3px 3px;z-index:0}
-main{position:relative;z-index:1;max-width:1160px;margin:0 auto;padding:40px 16px 96px}
-h1,h2,h3{font-family:Fraunces,ui-serif,Georgia,serif;letter-spacing:-.015em;line-height:1.1}
-h1{font-size:clamp(28px,4vw,44px);margin:6px 0 16px}h2{font-size:26px;margin:56px 0 16px}h3{font-size:19px;margin:0}
-a{color:inherit}.eyebrow{font:600 12px/1 "JetBrains Mono",ui-monospace,monospace;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0}
-.note{color:var(--muted);font-size:14px}.small{font-size:13px}.muted{color:var(--muted)}
+body{margin:0;background:var(--bg);color:var(--ink);font:14.5px/1.5 Geist,ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:1240px;margin:0 auto;padding:24px 16px 80px}
+h1{font-size:26px;line-height:1.2;letter-spacing:-.02em;margin:0 0 8px}h2{font-size:15px;margin:0;letter-spacing:-.01em}
+a{color:inherit}.eyebrow{font:500 12px/1 "Geist Mono",ui-monospace,monospace;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0}
+.note{color:var(--muted);font-size:13.5px}.small{font-size:12.5px}.muted{color:var(--muted)}
 .v-love{color:var(--love)}.v-like{color:var(--like)}.v-meh{color:var(--meh)}.v-skip{color:var(--skip)}
-b.v-love,b.v-like,b.v-meh,b.v-skip{text-transform:capitalize}
-.errors{border:1.5px solid var(--skip);border-radius:10px;padding:8px 14px;margin:12px 0}
-table{border-collapse:collapse;width:100%;font-size:14px}th,td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}th{font:600 12px/1.3 "JetBrains Mono",monospace;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
-code{font-family:"JetBrains Mono",monospace;font-size:.9em;background:var(--chip);padding:1px 5px;border-radius:4px}
+.errors{border:1px solid var(--skip);background:var(--loses);border-radius:10px;padding:8px 14px;margin:12px 0}
+table{border-collapse:collapse;width:100%;font-size:13.5px}th,td{border-bottom:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}
+th{font:500 11.5px/1.3 "Geist Mono",monospace;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);background:var(--soft)}
+code{font-family:"Geist Mono",monospace;font-size:.92em;background:var(--soft);padding:1px 5px;border-radius:4px}
 pre{overflow-x:auto}
 `
 
-const REPORT_CSS = `
-.mast{border-bottom:2px solid var(--ink);padding-bottom:16px}
-.brand{font:900 clamp(30px,5vw,56px)/1 Fraunces,serif;letter-spacing:-.03em;margin:12px 0 8px}
-.lineup{margin:28px 0 8px;padding:28px 20px 22px;border:2px solid var(--ink);border-radius:4px;text-align:center;background:linear-gradient(180deg,transparent,rgba(232,68,42,.06));position:relative}
-.lineup::before,.lineup::after{content:"✦";position:absolute;top:10px;color:var(--accent);font-size:14px}.lineup::before{left:14px}.lineup::after{right:14px}
-.kicker{font:600 11px/1 "JetBrains Mono",monospace;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);margin:0 0 14px}
-.kicker a{text-decoration:none}
-.row{margin:6px 0;font-family:Fraunces,serif;line-height:1.05;text-wrap:balance}
-.row .act{text-decoration:none;display:inline-flex;align-items:baseline;gap:.25em;transition:opacity .2s}
-.row .act:hover{opacity:.7}.row .g{font-family:"JetBrains Mono",monospace;font-size:.42em;font-weight:600;border:1.5px solid currentColor;border-radius:4px;padding:.1em .35em;transform:translateY(-.35em)}
-.r0{font-size:clamp(34px,6vw,64px);font-weight:900}.r1{font-size:clamp(22px,3.4vw,34px);font-weight:700}.r2{font-size:clamp(16px,2.2vw,22px);font-weight:400}
-.dot{color:var(--accent);margin:0 .5em;font-size:.6em;vertical-align:middle}
-.verdict-line{font-size:14px;color:var(--muted);margin:16px auto 0;max-width:70ch}
-.sec{display:flex;align-items:center;gap:14px}.sec::after{content:"";flex:1;height:2px;background:var(--ink)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:18px}
-.card{display:flex;flex-direction:column;text-decoration:none;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--shadow);transition:transform .25s cubic-bezier(.2,.7,.2,1),box-shadow .25s;animation:rise .6s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(var(--i) * 70ms)}
-.card:hover{transform:translateY(-4px) rotate(-.3deg)}
-@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.card{animation:none}html{scroll-behavior:auto}}
-.collage{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,74px);gap:2px;background:var(--line)}
-.collage.empty{display:flex;align-items:center;justify-content:center;height:150px;color:var(--muted)}
-.tile{margin:0;position:relative;overflow:hidden;background:var(--chip)}
-.tile.t0{grid-column:span 2;grid-row:span 2}
-.collage.n1 .t0{grid-column:span 3}.collage.n2 .t1{grid-row:span 2}
-.tile img{width:100%;height:100%;object-fit:cover;display:block;filter:saturate(.9) contrast(1.02);transition:transform .4s}
-.card:hover .tile img{transform:scale(1.05)}
-.tile figcaption{position:absolute;inset:auto 0 0 0;padding:14px 6px 4px;font:600 10.5px/1.15 "Bricolage Grotesque",sans-serif;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.72));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tile:not(:has(img)) figcaption{inset:0;display:flex;align-items:center;justify-content:center;text-align:center;white-space:normal;background:none;color:var(--ink);font:700 13px/1.15 Fraunces,serif;padding:8px}
-.card-body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:10px}
-.card-top{display:flex;gap:12px;align-items:center}
-.grade{flex:none;display:inline-grid;place-items:center;width:46px;height:46px;border:2px solid currentColor;border-radius:50%;font:900 24px/1 Fraunces,serif}
-.grade.sm{width:30px;height:30px;font-size:15px;border-width:1.5px;margin-right:8px;vertical-align:middle}
-.meta{margin:2px 0 0;font-size:13px;color:var(--muted)}
-.meter{position:relative;height:6px;background:var(--chip);border-radius:3px}.meter span{display:block;height:100%;background:var(--accent);border-radius:3px}
-.meter b{position:absolute;right:0;top:-18px;font:600 11px "JetBrains Mono",monospace;color:var(--muted)}
-blockquote{margin:0;font:italic 400 15px/1.45 Fraunces,serif}
-.flag{margin:0;font-size:12px;color:var(--skip)}
-.detail{border-top:1px solid var(--line);padding:28px 0 8px;scroll-margin-top:12px}
-.detail:target{animation:flash 1.4s}
-@keyframes flash{0%{background:rgba(232,68,42,.12)}100%{background:transparent}}
-.detail header h2{margin:6px 0 4px;font-size:30px}.detail header h2::after{display:none}
-.detail h4{font:600 12px/1 "JetBrains Mono",monospace;text-transform:uppercase;letter-spacing:.08em;margin:22px 0 10px}
-.detail h4.vs{margin-top:28px}
-.detail-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:28px}
-@media (max-width:820px){.detail-grid{grid-template-columns:1fr}}
-.fp{margin:6px 0;display:flex;flex-wrap:wrap;gap:6px;align-items:baseline}
-.fp-k{font:600 11px "JetBrains Mono",monospace;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);min-width:76px}
-.fp-i{background:var(--chip);border-radius:999px;padding:2px 10px;font-size:13.5px}
-.ad{white-space:pre-wrap;font:15px/1.65 Fraunces,serif;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:0}
-mark{color:inherit;border-radius:3px;padding:1px 2px;cursor:help;outline-offset:2px}
-mark.lands{background:var(--lands);box-shadow:inset 0 -2px 0 var(--love)}mark.loses{background:var(--loses);box-shadow:inset 0 -2px 0 var(--skip)}
-.legend{font-size:12px;color:var(--muted);margin:8px 0 0}
-.review{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
-.review.main{border:2px solid var(--accent);box-shadow:var(--shadow)}
-.arm{font:600 11px "JetBrains Mono",monospace;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 8px}
-.rv{margin:0 0 6px;font-size:18px}
-.reaction{margin:0;padding-left:18px}.reaction li{margin:8px 0}
-.src{display:inline-block;font:600 11px/1.6 "JetBrains Mono",monospace;background:var(--chip);border-radius:4px;padding:0 6px;margin:1px 2px;white-space:nowrap}
-.src.none{color:var(--muted);font-weight:400}
-.others{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
-.others .ad{font-size:13.5px;padding:10px 12px;margin-top:10px}
-.dropped{color:var(--muted);text-decoration:line-through}
+const DASH_CSS = `
+.appbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:14px;padding:10px 20px;background:var(--surface);border-bottom:1px solid var(--line)}
+.logo{font-weight:700;letter-spacing:-.01em}.mark{color:var(--accent)}.crumb{color:var(--muted);font-size:13px}.crumb b{color:var(--ink);font-weight:600}.spacer{flex:1}
+.badge{font-size:11.5px;font-weight:500;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:3px 10px}
+.page-h{margin:8px 0 18px}.meta{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}.m{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:2px 9px;font-size:12.5px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:12px}
+.kpi,.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+.kpi{padding:14px 16px}.kpi-k{margin:0 0 6px;font:500 11.5px "Geist Mono",monospace;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.kpi-v{margin:0;font-size:30px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}.kpi-v.sm{font-size:18px;line-height:1.25}.of{font-size:18px;color:var(--muted);font-weight:500}
+.kpi-s{margin:6px 0 0;font-size:12.5px;color:var(--muted)}
+.grade{display:inline-grid;place-items:center;min-width:26px;height:26px;border-radius:7px;font:700 13px Geist,sans-serif;color:#fff}
+.g-A{background:var(--love)}.g-B{background:var(--like)}.g-C{background:#a16207}.g-D{background:var(--skip)}.g-F{background:#991b1b}
+.verdict{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:1px 9px;text-transform:capitalize;border:1px solid currentColor}
+.verdict.v-love{color:var(--love)}.verdict.v-like{color:var(--like)}.verdict.v-meh{color:var(--meh)}.verdict.v-skip{color:var(--skip)}
+.two{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:12px;margin-bottom:12px}
+@media (max-width:900px){.two{grid-template-columns:1fr}}
+.panel{padding:16px;margin-bottom:12px}.ph{margin-bottom:12px}.ph p{margin:3px 0 0;font-size:12.5px}
+.row-h{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;align-items:flex-start}
+.lines{list-style:none;margin:0;padding:0;counter-reset:l}
+.line{display:grid;grid-template-columns:1fr 170px;gap:12px;align-items:center;padding:8px 10px;border-radius:8px;border-left:3px solid transparent;cursor:help}
+.line+.line{margin-top:2px}.line:hover{background:var(--soft)}
+.line.pos{border-left-color:var(--love)}.line.neg{border-left-color:var(--skip);background:color-mix(in srgb,var(--loses) 45%,transparent)}
+.lt{font-size:14px}.lc{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.bars{flex:1;height:6px;background:var(--soft);border-radius:3px;display:flex;overflow:hidden}.bl{background:var(--love)}.bx{background:var(--skip)}
+.nums{display:flex;gap:6px;min-width:52px;justify-content:flex-end;font:500 12px "Geist Mono",monospace}.up{color:var(--love)}.down{color:var(--skip)}
+.bottom-line{margin:0 0 12px;font-size:15px;font-weight:600;line-height:1.45}
+.actions{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.actions li{display:grid;grid-template-columns:56px 1fr;gap:10px;align-items:start}.actions p{margin:0}
+.kind{font:600 11px Geist,sans-serif;text-transform:uppercase;letter-spacing:.04em;text-align:center;border-radius:6px;padding:3px 0}
+.k-keep{background:var(--lands);color:var(--love)}.k-fix{background:var(--loses);color:var(--skip)}.k-try{background:#fef3c7;color:#92400e}.k-spend{background:var(--accent-soft);color:var(--accent)}.k-skip{background:var(--soft);color:var(--muted)}
+.q{font-size:12.5px;color:var(--muted);font-style:italic;margin-top:2px!important}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px!important}.tag{font-size:11.5px;background:var(--soft);border:1px solid var(--line);border-radius:5px;padding:0 6px;text-decoration:none}
+.tag:hover{border-color:var(--accent);color:var(--accent)}
+.heat .hmt{width:auto;font-size:12px}.hmt th,.hmt td{border:none;padding:3px;background:none}.hmt tbody th{text-align:right;font-family:Geist,sans-serif;text-transform:none;letter-spacing:0;color:var(--ink);font-size:12.5px;padding-right:8px}
+.hm{display:flex;flex-direction:column;align-items:center;justify-content:center;width:86px;height:46px;border-radius:8px;text-decoration:none;color:#fff;background:color-mix(in srgb,var(--love) calc(var(--s) * 1%),var(--skip))}
+.hm b{font-size:16px;line-height:1}.hm span{font-size:10.5px;opacity:.9;text-transform:capitalize}.hm-empty{color:var(--muted);text-align:center}
 .scroll{overflow-x:auto}
-.bar{display:block;height:4px;width:var(--w);background:var(--accent);border-radius:2px;margin-bottom:3px}
-.trace-box summary{cursor:pointer;font-weight:600}
-.trace{font-size:13px;padding-left:22px;margin-top:12px}.trace li{margin:4px 0}
-.trace .t{font:12px "JetBrains Mono",monospace;color:var(--muted);margin-right:8px}
-.trace .stage{font:600 11px "JetBrains Mono",monospace;background:var(--chip);border-radius:4px;padding:1px 6px;margin-right:8px}
-.trace .k-error{color:var(--skip)}.trace .k-warning{color:#b7791f}.trace .k-decision{font-weight:600}
-footer{margin-top:64px;border-top:2px solid var(--ink);padding-top:12px;font-size:13px}
+.results th[data-sort]{cursor:pointer;user-select:none}.results th.sorted::after{content:" ↑"}.results th.sorted.desc::after{content:" ↓"}
+.results .row{cursor:pointer}.results .row:hover td{background:var(--soft)}.results .row.open td{background:var(--accent-soft);border-bottom-color:transparent}
+.results .row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.fit{display:flex;align-items:center;gap:8px}.meter{width:70px;height:6px;background:var(--soft);border-radius:3px;overflow:hidden}.meter span{display:block;height:100%;background:var(--accent)}
+.act{color:var(--muted);max-width:200px}.into{min-width:220px}
+.mini{display:inline-flex;align-items:center;gap:5px;font-size:12px;background:var(--soft);border-radius:999px;padding:1px 8px 1px 2px;margin:1px 3px 1px 0}
+.mini img,.fpi img{width:18px;height:18px;border-radius:50%;object-fit:cover}
+.chev{color:var(--muted);font-size:18px;transition:transform .2s}.row.open .chev{transform:rotate(90deg)}
+.warn{font-size:11px;color:var(--skip);border:1px solid currentColor;border-radius:4px;padding:0 4px}
+.detail>td{background:var(--surface);padding:6px 10px 18px}
+.dgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}@media (max-width:900px){.dgrid{grid-template-columns:1fr}}
+.dk{margin:14px 0 6px;font:500 11.5px "Geist Mono",monospace;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}.dv{margin:0 0 4px}
+.reaction{margin:0;padding-left:18px}.reaction li{margin:6px 0}
+.src{display:inline-block;font:500 10.5px/1.7 "Geist Mono",monospace;background:var(--accent-soft);color:var(--accent);border-radius:4px;padding:0 5px;margin:1px 2px;white-space:nowrap}
+.src.none{background:var(--soft);color:var(--muted)}
+.fp{margin:4px 0;display:flex;flex-wrap:wrap;gap:5px;align-items:center}.fpk{font-size:12px;color:var(--muted);min-width:70px}
+.fpi{display:inline-flex;align-items:center;gap:5px;background:var(--soft);border-radius:999px;padding:2px 9px 2px 3px;font-size:12.5px}.fpi:not(:has(img)){padding-left:9px}
+.script{white-space:pre-wrap;font:13.5px/1.65 "Geist Mono",ui-monospace,monospace;background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:0}
+mark{color:inherit;border-radius:3px;padding:1px 2px;cursor:help}mark.lands{background:var(--lands);box-shadow:inset 0 -2px 0 var(--love)}mark.loses{background:var(--loses);box-shadow:inset 0 -2px 0 var(--skip)}
+.cmp{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px}.cmp p{margin:0}.cmp-t{font-size:13px;margin-top:4px!important}
+.dropped{color:var(--muted);text-decoration:line-through;margin:4px 0}
+.trace{font-size:12.5px;padding-left:22px;margin:12px 0 0}.trace li{margin:3px 0}.trace .t{font:12px "Geist Mono",monospace;color:var(--muted);margin-right:8px}
+.trace .stage{font:500 11px "Geist Mono",monospace;background:var(--soft);border-radius:4px;padding:1px 6px;margin-right:8px}.trace .k-error{color:var(--skip)}.trace .k-decision{font-weight:500}
+details summary{cursor:pointer}
+footer{margin-top:28px;text-align:center}
 `

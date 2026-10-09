@@ -6,7 +6,7 @@ import { ARMS, Arm, Brief, Fixture, Run, Verdict, type TraceEvent } from './cont
 import { renderReport } from './report/render.ts'
 import { quota } from './qloo/client.ts'
 import { judge } from './engine/judge.ts'
-import { assembleRun, buildSegments, judgeAll, writeRun } from './engine/run.ts'
+import { assembleRun, buildSegments, judgeAll, summaryFor, writeRun } from './engine/run.ts'
 import YAML from 'yaml'
 import { loadEvalAds, runEval, scoreEval } from './eval/harness.ts'
 import { gradeWithClaude, generateJson, MODEL, runAgent } from './llm.ts'
@@ -47,7 +47,8 @@ async function cmdRun() {
   }
   console.log(`Judging ${segments.length} segments × ${arms.length} arms with ${MODEL}…`)
   const reviews = await judgeAll(brief, segments, references, arms, trace, errors)
-  const run = assembleRun(brief, segments, references, reviews, trace, errors)
+  const summary = await summaryFor(brief, segments, reviews, trace, errors)
+  const run = assembleRun(brief, segments, references, reviews, trace, errors, summary)
   const report = await writeRun(run)
   const q = quota.monthRemaining == null ? '' : ` · Qloo quota left ${quota.monthRemaining}`
   console.log(`\n${run.verdictLine}\n$${run.usage.costUsd.toFixed(4)} · ${run.usage.qlooCalls} Qloo calls${q} · ${(run.usage.ms / 1000).toFixed(1)}s\nReport: ${report}`)

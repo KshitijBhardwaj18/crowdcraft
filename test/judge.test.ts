@@ -109,3 +109,18 @@ describe('grade', () => {
     expect([95, 85, 84, 70, 55, 40, 39].map(grade)).toEqual(['A', 'A', 'B', 'B', 'C', 'D', 'F'])
   })
 })
+
+describe('lineTally', () => {
+  it('counts each audience once per line and effect', async () => {
+    const { lineTally } = await import('../src/engine/summary.ts')
+    const ad = 'Great hook here. Weak middle.\nStrong close!'
+    const h = (start: number, end: number, effect: 'lands' | 'loses') => ({ quote: '', start, end, effect, reason: '', sourceIds: [] })
+    const reviews = [
+      { segmentId: 'a', highlights: [h(0, 10, 'lands'), h(6, 15, 'lands'), h(17, 28, 'loses')] },
+      { segmentId: 'b', highlights: [h(30, 43, 'lands')] },
+    ] as unknown as Review[]
+    const t = lineTally(ad, reviews)
+    expect(t.map((l) => l.text)).toEqual(['Great hook here.', 'Weak middle.', 'Strong close!'])
+    expect(t.map((l) => [l.lands, l.loses])).toEqual([[['a'], []], [[], ['a']], [['b'], []]])
+  })
+})

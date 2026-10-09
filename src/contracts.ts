@@ -53,6 +53,8 @@ export const Segment = z.object({
   name: z.string(),
   definedBy: z.array(z.string()),
   signals: QlooSignals,
+  region: z.string().nullable().default(null), // "Austin, TX" (spec.md > D4b)
+  ageBand: z.string().nullable().default(null), // "25-29"
   confidence: z.enum(['normal', 'broadened', 'thin']),
   confidenceNote: z.string().nullable(),
   fingerprint: z.array(EvidenceItem.extend({ distinctiveness: z.number() })),
@@ -115,6 +117,20 @@ export const Review = z.object({
 })
 export type Review = z.infer<typeof Review>
 
+// The "What to do" step (spec.md > Summary). Strict-compatible: it is also the LLM's output schema.
+export const Summary = z.object({
+  bottomLine: z.string(),
+  actions: z.array(
+    z.object({
+      kind: z.enum(['keep', 'fix', 'try', 'spend', 'skip']),
+      text: z.string(),
+      segmentIds: z.array(z.string()),
+      quote: z.string().nullable(),
+    }),
+  ),
+})
+export type Summary = z.infer<typeof Summary>
+
 export const TraceEvent = z.object({
   t: z.number(),
   stage: z.enum(['brief', 'signals', 'candidates', 'fingerprints', 'select', 'references', 'fit', 'judge', 'report']),
@@ -143,6 +159,7 @@ export const Run = z.object({
   references: z.array(Reference),
   reviews: z.array(Review),
   verdictLine: z.string(),
+  summary: Summary.nullable().default(null),
   trace: z.array(TraceEvent),
   usage: Usage,
   errors: z.array(z.object({ stage: z.string(), message: z.string() })),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Brief, EvidenceItem } from '../src/contracts.ts'
-import { ageLabel, clampToBrief } from '../src/engine/candidates.ts'
+import type { EvidenceItem } from '../src/contracts.ts'
+import { ageBands, ageLabel, regionLabel } from '../src/engine/candidates.ts'
 import { distanceMatrix, distinctiveItems, greedySelect, pearson, type Column } from '../src/engine/select.ts'
 import { isSensitiveTag } from '../src/qloo/tools.ts'
 
@@ -48,22 +48,23 @@ describe('distinctiveItems', () => {
   })
 })
 
-describe('clampToBrief', () => {
-  const brief = { target: { ageBuckets: ['25_to_29', '30_to_34'], gender: null } } as unknown as Brief
-  const c = (name: string, ageBuckets: Brief['target']['ageBuckets']) => ({ name, ageBuckets, gender: 'male' as const })
-
-  it('drops candidates entirely outside the brief ages', () => {
-    expect(clampToBrief(c('Jazz fans, 35-54', ['35_to_44', '45_to_54']), brief, {})).toBeNull()
-  })
-  it('clamps partial overlaps and fixes the name; gender follows the brief', () => {
-    const r = clampToBrief(c('Country fans, 30-44', ['30_to_34', '35_to_44']), brief, {})!
-    expect(r.ageBuckets).toEqual(['30_to_34'])
-    expect(r.name).toBe('Country fans, 30-34')
-    expect(r.gender).toBeNull()
+describe('cells', () => {
+  it('splits the target ages into contiguous bands', () => {
+    expect(ageBands(['24_and_younger', '25_to_29', '30_to_34'], 2)).toEqual([['24_and_younger', '25_to_29'], ['30_to_34']])
+    expect(ageBands(['25_to_29'], 2)).toEqual([['25_to_29']])
+    expect(ageBands(null, 2)).toEqual([['24_and_younger', '25_to_29', '30_to_34'], ['35_to_44', '45_to_54']])
+    expect(ageBands(['25_to_29', '30_to_34', '35_to_44', '45_to_54'], 4)).toHaveLength(4)
   })
   it('labels age ranges', () => {
     expect(ageLabel(['24_and_younger', '25_to_29'])).toBe('under 30')
+    expect(ageLabel(['30_to_34'])).toBe('30-34')
     expect(ageLabel(['45_to_54', '55_and_older'])).toBe('45+')
+  })
+  it('shortens region names the way marketers write them', () => {
+    expect(regionLabel('Austin, Travis County, Texas, United States')).toBe('Austin, TX')
+    expect(regionLabel('Denver, Colorado, United States')).toBe('Denver, CO')
+    expect(regionLabel('Toronto, Ontario, Canada')).toBe('Toronto, Canada')
+    expect(regionLabel('Mumbai')).toBe('Mumbai')
   })
 })
 

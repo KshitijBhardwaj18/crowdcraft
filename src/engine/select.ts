@@ -98,10 +98,11 @@ export const jaccard = (a: string[], b: string[]) => {
 }
 
 // The reported distinctness metric: the worst pair's mean top-list overlap across domains.
-export function maxOverlap(fps: Fingerprint[]): number {
+export function maxOverlap(fps: Fingerprint[], pair: (a: Fingerprint, b: Fingerprint) => boolean = () => true): number {
   let worst = 0
   for (let i = 0; i < fps.length; i++)
     for (let j = i + 1; j < fps.length; j++) {
+      if (!pair(fps[i], fps[j])) continue
       const o = FP_DOMAINS.reduce((s, d) => s + jaccard(fps[i].top[d].map((x) => x.qlooId), fps[j].top[d].map((x) => x.qlooId)), 0) / FP_DOMAINS.length
       worst = Math.max(worst, o)
     }
@@ -110,36 +111,38 @@ export function maxOverlap(fps: Fingerprint[]): number {
 
 const AGE: Record<string, string> = { '24_and_younger': '24 and under', '25_to_29': '25-29', '30_to_34': '30-34', '35_to_44': '35-44', '45_to_54': '45-54', '55_and_older': '55+' }
 
-export async function selectSegments(fps: Fingerprint[], ctx: Ctx, reg: ToolRegistry): Promise<{ segments: Segment[]; overlap: number }> {
-  const usable = fps.filter((f) => !f.thin).length >= 2 ? fps.filter((f) => !f.thin) : fps
-  const cols = buildPool(usable)
-  const rows = await affinityMatrix(usable, cols, ctx)
-  const dist = distanceMatrix(rows)
-  const richness = rows.map((r) => r.filter((x) => x > 0).length)
-  const kept = greedySelect(dist, richness)
-  const minD = Math.min(...kept.flatMap((a) => kept.filter((b) => b !== a).map((b) => dist[a][b])))
-  ctx.trace?.add('select', 'decision', `Compared ${usable.length} candidates on ${cols.length} items → keeping ${kept.length} most distinct (closest pair distance ${minD.toFixed(2)})`, {
-    kept: kept.map((k) => usable[k].cand.name),
-  })
-  const keptFps = kept.map((k) => usable[k])
-  const items = distinctiveItems(kept, rows, cols, keptFps.map((f) => new Set(FP_DOMAINS.flatMap((d) => f.top[d].map((x) => x.qlooId)))))
-  const overlap = maxOverlap(keptFps)
-  ctx.trace?.add('select', 'decision', `Worst-pair overlap of top items: ${(overlap * 100).toFixed(0)}% (target ≤ 30%)`)
+// Describe the cells (spec.md > D4b, D4): one affinity matrix across all cells gives each its distinctive items;
+// themes and Analysis Compare say what sets it apart. Cells are kept as built: they are what the marketer buys.
+export async function describeSegments(fps: Fingerprint[], ctx: Ctx, reg: ToolRegistry): Promise<{ segments: Segment[]; overlap: number }> {
+  const cols = buildPool(fps)
+  const rows = await affinityMatrix(fps, cols, ctx)
+  const kept = fps.map((_, i) => i)
+  ctx.trace?.add('select', 'decision', `Scored ${fps.length} audiences on ${cols.length} shared taste items to find what each loves more than the others`)
+  const items = distinctiveItems(kept, rows, cols, fps.map((f) => new Set(FP_DOMAINS.flatMap((d) => f.top[d].map((x) => x.qlooId)))))
+  // Cells in the same region share taste by design (D4b); the distinctness target applies across regions.
+  const regionsOf = [...new Set(fps.map((f) => f.cand.region))]
+  const cross = regionsOf.length > 1 ? Math.max(...regionsOf.flatMap((a, i) => regionsOf.slice(i + 1).map((b) => maxOverlap(fps.filter((f) => f.cand.region === a || f.cand.region === b), (x, y) => x.cand.region !== y.cand.region)))) : maxOverlap(fps)
+  const same = maxOverlap(fps, (x, y) => x.cand.region === y.cand.region)
+  const overlap = cross
+  ctx.trace?.add('select', 'decision', `Worst overlap of top items across regions: ${(cross * 100).toFixed(0)}% (target ≤ 30%); within a region (age bands): ${(same * 100).toFixed(0)}%`)
 
-  const themeSets = keptFps.map((f) => new Set(f.themes.map((t) => t.qlooId)))
+  const themeSets = fps.map((f) => new Set(f.themes.map((t) => t.qlooId)))
   const ids = new Set<string>()
   const segments = await Promise.all(
-    keptFps.map(async (fp, i) => {
+    fps.map(async (fp, i) => {
       const others = items.filter((_, j) => j !== i).flat()
-      const apart = (await setsApart(items[i].map((x) => x.qlooId), others.map((x) => x.qlooId), ctx).catch(() => [])).filter((t, k, all) => !isSensitiveTag(t.name) && all.findIndex((u) => u.name.toLowerCase() === t.name.toLowerCase()) === k)
-      const themes = fp.themes.filter((t) => !isSensitiveTag(t.name)).filter((t) => themeSets.filter((s, j) => j !== i && s.has(t.qlooId)).length < (keptFps.length - 1) / 2).slice(0, 5)
+      const apart = (await setsApart(items[i].map((x) => x.qlooId), others.map((x) => x.qlooId), ctx).catch(() => [])).filter(
+        (t, k, all) => !isSensitiveTag(t.name) && all.findIndex((u) => u.name.toLowerCase() === t.name.toLowerCase()) === k,
+      )
+      // The brief's own interest tags are shared by every cell, so they explain nothing about this one.
+      const themes = fp.themes.filter((t) => !isSensitiveTag(t.name) && !fp.cand.signals.tagIds.includes(t.qlooId)).filter((t) => themeSets.filter((s, j) => j !== i && s.has(t.qlooId)).length < (fps.length - 1) / 2).slice(0, 5)
       let id = fp.cand.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
       while (ids.has(id)) id += '-2'
       ids.add(id)
       const s = fp.cand.signals
       const definedBy = [
-        s.locationQuery ? (reg.localities.get(s.locationQuery.toLowerCase()) ?? s.locationQuery) : null,
-        s.ageBuckets?.map((a) => AGE[a]).join(', '),
+        fp.cand.region ?? s.locationQuery,
+        fp.cand.ageBand ?? s.ageBuckets?.map((a) => AGE[a]).join(', '),
         s.gender,
         ...[...s.tagIds, ...s.audienceIds].map((t) => reg.names.get(t) ?? t),
         ...s.entityIds.map((e) => `fans of ${reg.names.get(e) ?? e}`),
@@ -149,8 +152,10 @@ export async function selectSegments(fps: Fingerprint[], ctx: Ctx, reg: ToolRegi
         name: fp.cand.name,
         definedBy,
         signals: s,
+        region: fp.cand.region,
+        ageBand: fp.cand.ageBand,
         confidence: fp.thin ? 'thin' : fp.cand.broadened ? 'broadened' : 'normal',
-        confidenceNote: fp.thin ? 'Qloo returned little taste data for this segment' : fp.cand.broadened,
+        confidenceNote: fp.thin ? 'Qloo returned little taste data for this audience' : fp.cand.broadened,
         fingerprint: items[i],
         themes,
         setsApart: apart,
