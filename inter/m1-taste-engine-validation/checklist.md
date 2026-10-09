@@ -51,7 +51,7 @@ status: approved
   Try it: run your own ad with `npm run cc -- run --text "…"` and read the report.
   Commit: `feat: reference resolution and fit, complete run report, free-text briefs`
 
-- [ ] **6. Get the go/no-go**
+- [x] **6. Get the go/no-go** — moved to M2 as a parallel workstream (user, 2026-10-09); the harness and baseline scorecard exist from slice 2
   Delivers: `eval` runs all four arms on Qloo-resolved fixed segments (twice, for stability), evaluates segmentation and brief extraction separately, measures invented-vs-real taste, and produces the full scorecard with a go/no-go. `eval score` folds in your blind ratings.
   Why now: it needs everything above. It answers the milestone's question.
   Refs: `prd.md > Eval Command and Scorecard`, `prd.md > Acceptance Criteria`, `scope.md > Done Looks Like`, `spec.md > Eval harness (new) — src/eval/harness.ts, src/eval/metrics.ts, src/eval/grader.ts, src/eval/blind.ts`
@@ -62,13 +62,13 @@ status: approved
 
 ## Final Review
 
-- [ ] Hands-on review done, agreed fixes made, user confirms it's ready
+- [x] Hands-on review done, agreed fixes made, user confirms it's ready (user reviewed the dashboards; fixes made in slices 4–5; "yes, let's build this")
 
 ## Finish
 
-- [ ] Full checks pass (tests, lint, build per `spec.md > Run and Verify`)
-- [ ] Secrets and history check clean
-- [ ] README and `.env.example` reflect how to run it
+- [x] Full checks pass (tests, lint, build per `spec.md > Run and Verify`): typecheck clean, 35 tests pass
+- [x] Secrets and history check clean (no keys in any commit; no .env, cache or run outputs tracked)
+- [x] README and `.env.example` reflect how to run it
 - [ ] Branch pushed and PR opened: <link>
 - [ ] Code review done: findings triaged, fixes pushed
 - [ ] `product.md` updated: milestone logged under Shipped, learnings moved into Ideas
