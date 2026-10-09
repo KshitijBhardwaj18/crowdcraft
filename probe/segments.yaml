@@ -1,0 +1,14 @@
+# Coverage probe (prd.md > Coverage Probe): the same taste × age segments in each market.
+# Each market uses one major city so markets are comparable; the US is the reference.
+markets:
+  - { id: us, name: United States, city: Chicago }
+  - { id: ca, name: Canada, city: Toronto }
+  - { id: uk, name: United Kingdom, city: London }
+  - { id: es, name: Spain, city: Madrid }
+  - { id: in, name: India, city: Mumbai }
+tastes:
+  - { id: indie, tagQuery: indie rock }
+  - { id: hiphop, tagQuery: hip hop }
+  - { id: outdoors, tagQuery: hiking }
+ages: [25_to_29, 45_to_54]
+domains: [artist, brand, tv_show, place]
