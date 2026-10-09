@@ -25,8 +25,10 @@ Win the hackathon ([qloo.devpost.com](https://qloo.devpost.com/), deadline **Oct
 
 ## Shipped
 <!-- inter-build appends a line here when each milestone ships. -->
+- M1 Taste Engine Validation: Qloo-grounded audiences (region × age from Qloo's heatmap of the ad's references), sourced reviews vs generic-AI baselines, and three deliverables per run (who to target, what to fix, better versions), with an HTML dashboard, eval harness and coverage probe. Stacked PRs https://github.com/KshitijBhardwaj18/crowdcraft/pull/1 → /5 (2026-10-09). The go/no-go eval moved to M2.
 
 ## Ideas
+- **From M1 (deferred review items and learnings):** run the go/no-go eval with Qloo arms, adding a Tier E of "close crowds" (generic AI scored 100% on Tiers A–D); judge better versions with a generic rewrite and the B1 judge too; check rewrite length/brand/offer in code; pull small metros' heat toward the mean; check the extracted ad isn't paraphrased; probe and evidence tests; grader cost in totals. Learnings: Qloo only drives decisions when an ad names real things, so ads that name nothing get a "taste only, lower confidence" label; precise reference matching matters more than anything else (look-alike matches produce confident wrong verdicts).
 - **Leading M2 candidate (user, 2026-10-09): the live product built around two features.**
   - *Audience builder ("test on my audience")*: pick regions (country → state → city or neighbourhood, several allowed), age bands, optional gender, and "people who like…" (Qloo search for artists, brands, shows and genres). The ad is tested on exactly those cells, matching Meta and TikTok targeting; audiences can be saved. The engine already takes market, ages and interests, so this is mostly a brief-building UI.
   - *Discover ("find my best audience")*: from the ad alone, read its references and vibe, ask Qloo which tastes, ages and places over-index on them (demographics, insights seeded with the ad's references, Heatmap), propose the top 3–5 audiences, test them for real and rank them. Needs M1 slice 5 (references resolved in Qloo). Uses the last unused Qloo capability (Heatmap).

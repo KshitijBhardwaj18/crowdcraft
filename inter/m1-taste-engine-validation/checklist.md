@@ -1,6 +1,6 @@
 ---
 doc: checklist
-status: approved
+status: done
 ---
 # M1: Taste Engine Validation — Build Checklist
 
@@ -78,7 +78,7 @@ status: approved
 - [x] README and `.env.example` reflect how to run it
 - [x] Branch pushed and PR opened: stacked PRs https://github.com/KshitijBhardwaj18/crowdcraft/pull/1 → /2 → /3 → /4 → /5 (stack #6, base main)
 - [x] Code review done: findings triaged, fixes pushed (to PR #5, the top of the stack)
-- [ ] `product.md` updated: milestone logged under Shipped, learnings moved into Ideas
+- [x] `product.md` updated: milestone logged under Shipped, learnings moved into Ideas
 
 ## Revisions
 - 2026-10-09 (slice 1): Qloo key arrived early, so two Qloo checks ran now. **Verified:** the affinity score is `query.affinity`. **Half-holds:** `filter.results.entities` *omits* items below a segment's cutoff rather than scoring them, and returned scores are compressed (≈0.85–0.99). Plan: a missing item counts as "no engagement" (0) and fit is normalised across segments per reference (already how `normFit` works). Slice 3 confirms this at scale.
