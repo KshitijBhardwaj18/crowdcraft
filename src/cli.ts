@@ -7,6 +7,8 @@ import { judge } from './engine/judge.ts'
 import { assembleRun, judgeAll, writeRun } from './engine/run.ts'
 import { loadEvalAds, runEval, scoreEval } from './eval/harness.ts'
 import { gradeWithClaude, generateJson, MODEL, runAgent } from './llm.ts'
+import { runProbe } from './probe/probe.ts'
+import { fit, qlooGet, searchAudiences, topEntities } from './qloo/client.ts'
 import { Trace } from './trace.ts'
 
 const args = process.argv.slice(2)
@@ -52,6 +54,51 @@ async function cmdEval() {
   console.log(`\n${r.verdict.verdict}: ${r.verdict.why}\nScorecard: ${r.path}`)
 }
 
+async function cmdProbe() {
+  const { dir, results } = await runProbe(console.log)
+  console.log('')
+  for (const r of results) console.log(`${r.verdict.padEnd(8)} ${r.name} (fill ${Math.round(r.fillRate * 100)}%, local ${r.localSpecificity == null ? 'ref' : Math.round(r.localSpecificity * 100) + '%'}, distinct ${Math.round(r.distinctness * 100)}%)`)
+  console.log(`Coverage: ${dir}/coverage.html`)
+}
+
+// The open Qloo assumptions (spec.md > Open Issues #3).
+async function qlooChecks(check: (name: string, fn: () => Promise<string>) => Promise<void>) {
+  const sig = (city: string) => ({ locationQuery: city, locationId: null, ageBuckets: ['25_to_29', '30_to_34'] as ('25_to_29' | '30_to_34')[], gender: null, audienceIds: [], tagIds: [], entityIds: [] })
+  const ctx = {}
+  await check('Qloo affinity field is query.affinity', async () => {
+    const top = await topEntities('artist', sig('Austin'), 5, ctx)
+    if (!top.length || top.some((t) => t.affinity == null)) throw new Error('missing affinity')
+    return top.map((t) => `${t.name} ${t.affinity!.toFixed(3)}`).join(', ')
+  })
+  await check('Qloo fit on another crowd\'s favourites (filter.results.entities, 60 IDs in 2 chunks)', async () => {
+    const pool = [...new Set((await Promise.all(['Nashville', 'Atlanta', 'Seattle'].map((c) => topEntities('artist', sig(c), 20, ctx)))).flat().map((e) => e.qlooId))]
+    const f = await fit('artist', sig('Austin'), pool, ctx)
+    const scored = [...f.values()].filter((v) => v != null).length
+    if (!scored) throw new Error('no item scored')
+    return `${scored} of ${pool.length} scored for Austin; ${pool.length - scored} omitted (treated as no engagement)`
+  })
+  await check('Qloo theme fit method', async () => {
+    const tag = 'urn:tag:genre:music:indie_rock'
+    const d = await qlooGet('/v2/insights', { 'filter.type': 'urn:tag', 'signal.location.query': 'Austin', 'filter.results.tags': tag, take: 5 }, ctx, 'theme fit probe')
+    const tags = d.results?.tags ?? []
+    if (tags.length === 1 && tags[0].tag_id === tag) return `filter.results.tags works (affinity ${tags[0].query?.affinity})`
+    return `filter.results.tags not honoured (${tags.length} tags back); fall back to the tag's rank in the segment's top themes`
+  })
+  await check('Qloo audiences endpoint (marked deprecated)', async () => {
+    const a = await searchAudiences('hiking', ctx)
+    if (!a.length) throw new Error('no audiences returned')
+    return a.map((x) => `${x.name} (${x.type})`).join(', ')
+  })
+  await check('Qloo quota', async () => {
+    const res = await fetch('https://hackathon.api.qloo.com/v2/tags?filter.query=quota&take=1', { headers: { 'X-Api-Key': process.env.QLOO_API_KEY ?? '' } })
+    const h = (k: string) => res.headers.get(k)
+    const left = Number(h('x-month-ratelimit-remaining'))
+    const msg = `${h('x-second-ratelimit-limit')}/second; ${left} of ${h('x-month-ratelimit-limit')} left this month`
+    if (left < 1000) throw new Error(`low monthly quota: ${msg}`)
+    return msg
+  })
+}
+
 async function cmdSelfcheck() {
   let ok = true
   const check = async (name: string, fn: () => Promise<string>) => {
@@ -62,6 +109,11 @@ async function cmdSelfcheck() {
       ok = false
       console.log(`✗ ${name}: ${(e as Error).message}`)
     }
+  }
+  if (args.includes('--qloo')) {
+    await qlooChecks(check)
+    if (!ok) process.exitCode = 1
+    return
   }
   console.log(`Model: ${MODEL}`)
 
@@ -122,10 +174,10 @@ async function cmdSelfcheck() {
   if (!ok) process.exitCode = 1
 }
 
-const commands: Record<string, () => Promise<void>> = { run: cmdRun, eval: cmdEval, selfcheck: cmdSelfcheck }
+const commands: Record<string, () => Promise<void>> = { run: cmdRun, eval: cmdEval, probe: cmdProbe, selfcheck: cmdSelfcheck }
 const cmd = commands[args[0]]
 if (!cmd) {
-  console.log('Commands: run --fixture <file> [--arms a,b] | eval [--ads ids] [--arms a,b] [--reps n] | eval score <dir> | selfcheck')
+  console.log('Commands: run --fixture <file> [--arms a,b] | eval [--ads ids] [--arms a,b] [--reps n] | eval score <dir> | probe | selfcheck [--qloo]')
   process.exitCode = 1
 } else {
   cmd().catch((e) => {

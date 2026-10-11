@@ -270,7 +270,7 @@ Base `https://hackathon.api.qloo.com`, header `X-Api-Key: $QLOO_API_KEY`, GET wi
 | Card details | `GET /entities?entity_ids=<ids>` |
 | Explainability | `feature.explainability=true` on fit calls |
 Signals map: `locationQuery`→`signal.location.query`, `locationId`→`signal.location`, `ageBuckets`→`signal.demographics.age`, `gender`→`signal.demographics.gender`, `audienceIds`→`signal.demographics.audiences`, `tagIds`→`signal.interests.tags`, `entityIds`→`signal.interests.entities`.
-Limits: `take` ≤ 50; rate limits unpublished ("set high"). Terms: never commit Qloo responses; server-side caching is allowed. Keys are deactivated after judging.
+Limits: `take` ≤ 50; **5 requests/second and 10,000 requests/month** (verified from `x-second-ratelimit-*` and `x-month-ratelimit-*` headers on 2026-10-09). Terms: never commit Qloo responses; server-side caching is allowed. Keys are deactivated after judging.
 **Verified 2026-10-09:** the affinity field is `query.affinity`; `filter.results.entities` omits items below a segment's cutoff (treated as 0). **Still unverified:** how theme (tag) fit is best measured, whether audiences work, and rate limits.
 
 ### Meta Model API (Muse Spark)
@@ -332,6 +332,7 @@ CrowdCraft/
 ## Risks and Caveats
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
+| Qloo monthly quota (10,000 calls, one budget for M1, M2 and judging) | High | Fresh runs cost ~200 calls; the live app could run dry | Permanent local cache; fewer candidates and domains per run; quota tracked in selfcheck and traces; ask Qloo for more on Discord |
 | Qloo key arrives late | Medium | Blocks every Qloo stage and the evals | Build the LLM layer, contracts, judge, report and harness first on hand-made fixtures; Qloo slices start the day the key lands |
 | `filter.results.entities` doesn't score low-affinity items, or the affinity field differs | Medium | D4's matrix and reference fit | First Qloo probe checks it; fall back to overlap-based selection and rank-based fit (contracts unchanged) |
 | Muse tool calling or structured output misbehaves through the AI SDK | Medium | Agent stages and the judge | Slice 1 probes it; fall back per stage to `generateJson`, or to the plain `openai` SDK behind `llm.ts` |
