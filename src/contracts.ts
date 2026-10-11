@@ -152,3 +152,26 @@ export type Run = z.infer<typeof Run>
 // Dev-only input for `run --fixture`: skips every Qloo stage.
 export const Fixture = z.object({ brief: Brief, segments: z.array(Segment), references: z.array(Reference) })
 export type Fixture = z.infer<typeof Fixture>
+
+// Eval set (spec.md > Data Model > EvalAd). Segments are plain terms, resolved to Qloo when the Qloo arms run.
+export const EvalSegmentSpec = z.object({
+  id: z.string(),
+  name: z.string(),
+  locationQuery: z.string().nullable(),
+  ageBuckets: z.array(AgeBucket).nullable(),
+  gender: Gender.nullable(),
+  tagQueries: z.array(z.string()),
+  entityQueries: z.array(z.string()),
+})
+export type EvalSegmentSpec = z.infer<typeof EvalSegmentSpec>
+
+export const EvalAd = z.object({
+  id: z.string(),
+  tier: z.enum(['A', 'B', 'C', 'D', 'demo']),
+  briefText: z.string(),
+  brief: Brief,
+  segments: z.array(EvalSegmentSpec),
+  intendedSegmentId: z.string().nullable(), // Tier D: the brief's target segment
+  actualFitSegmentId: z.string().nullable(), // Tier D: the crowd the references really fit
+})
+export type EvalAd = z.infer<typeof EvalAd>

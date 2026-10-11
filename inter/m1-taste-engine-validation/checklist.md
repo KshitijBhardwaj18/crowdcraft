@@ -15,7 +15,7 @@ status: approved
   Try it: open `runs/<id>/report.html` and compare the four reviews of the same segment (the data is hand-made, so judge the format and tone, not the truth).
   Commit: `feat: Muse judge with four arms, citation checks and HTML report`
 
-- [ ] **2. Baselines run through the eval and get a scorecard**
+- [x] **2. Baselines run through the eval and get a scorecard**
   Delivers: the eval set exists; `eval` runs the two baselines on its fixed segments, grades specificity with Claude, measures stability and accuracy, exports blind pairs, and writes a scorecard. Metrics that need Qloo show as pending.
   Why now: the `claude -p` grader is the second open issue, and the harness and eval ads can be finished before the Qloo key arrives. Baseline numbers also show early how strong the bar is.
   Refs: `prd.md > Eval Set`, `prd.md > Eval Command and Scorecard`, `spec.md > Eval harness (new) — src/eval/harness.ts, src/eval/metrics.ts, src/eval/grader.ts, src/eval/blind.ts`, `spec.md > Interfaces`, `spec.md > Claude Code CLI (claude -p)`
@@ -37,9 +37,9 @@ status: approved
   Delivers: `run` takes a brief, turns it into verified Qloo signals (agent), proposes and broadens candidates (agent), builds fingerprints and the affinity matrix, and keeps the 4–6 most distinct segments with their distinctive items and "what sets them apart". The judge uses them, without references yet.
   Why now: segments are the kernel's foundation, and this is the first real look at it.
   Refs: `prd.md > Brief`, `prd.md > Agent Flow (how Qloo is used)`, `prd.md > Segment`, `spec.md > D2: How agentic the engine is — decided`, `spec.md > D4: Segment building and distinctness — decided`, `spec.md > Qloo agent tools (new) — src/qloo/tools.ts`, `spec.md > Brief stage (new) — src/engine/brief.ts`, `spec.md > Candidates stage (new) — src/engine/candidates.ts`, `spec.md > Fingerprints and selection (new) — src/engine/fingerprints.ts, src/engine/select.ts`, `spec.md > Policy additions`
-  Build: `src/qloo/tools.ts`, `src/engine/brief.ts`, `candidates.ts`, `fingerprints.ts`, `select.ts` (plus unit tests on a fake matrix); wire into `run.ts`; segment section of the report.
+  Build: `src/qloo/tools.ts`, `src/engine/brief.ts`, `candidates.ts`, `fingerprints.ts`, `select.ts` (plus unit tests on a fake matrix); wire into `run.ts`; **report redesign as one page built for analysis**: a segment grid (all segments side by side), a letter grade from the ranking score beside each verdict, click-through to reaction, highlights and sources, and a **taste collage** per segment built from its real Qloo images (user's choice; no AI portraits).
   Verify: `npm test` passes; `npm run cc -- run eval/ads/demo-concert.yaml` (and the other two demos) produce 4–6 segments each with overlap ≤ 0.30 printed, trace entries for agent decisions, and names without stereotype labels; a brief mentioning ethnicity lists it under unused, with no segment split on it.
-  Try it: open the report. Do the segments feel like real, different crowds?
+  Try it: open the report. Do the segments feel like real, different crowds, and is the page pleasant and easy to analyse?
   Commit: `feat: brief to Qloo signals, candidate agent and affinity-matrix segments`
 
 - [ ] **5. The full CrowdCraft review, with the ad's references scored by Qloo**
@@ -77,4 +77,11 @@ status: approved
 - 2026-10-09 (slice 1): Qloo key arrived early, so two Qloo checks ran now. **Verified:** the affinity score is `query.affinity`. **Half-holds:** `filter.results.entities` *omits* items below a segment's cutoff rather than scoring them, and returned scores are compressed (≈0.85–0.99). Plan: a missing item counts as "no engagement" (0) and fit is normalised across segments per reference (already how `normFit` works). Slice 3 confirms this at scale.
 - 2026-10-09 (slice 1): Muse 1.3 Contributor through AI SDK v7 works: structured output (`Output.object`), the tool loop ending in `finish`, and drift of 0 on identical input. Latency is about 10–20s per call (reasoning can't be off), so M2's UI must stream progress.
 - 2026-10-09 (slice 1): internal changes. `Trace` and a small `limiter` live in `src/trace.ts` (no `p-limit`); `dotenv` dropped for Node's `--env-file-if-exists`; the judge cites short aliases (F1, T1, S1, R1) that code maps back to Qloo IDs, because models copy UUIDs badly.
+- 2026-10-09 (after slice 1): user asked for a beautiful one-page report built for analysis (segment grid, grades, a visual per segment). Folded into slice 4, where real Qloo segments and images first exist. AI portraits of people were flagged as a stereotype risk (they'd infer race, gender and looks from the segment); the visual option is the user's call.
+- 2026-10-09 (slice 2): the user chose taste collages from real Qloo images for the segment visuals.
+- 2026-10-09 (slice 2): the eval set has 16 eval ads (Tier B has 7, not 6) plus 3 demos. Count targets in the PRD are applied as the same proportions (e.g. accuracy ≥ 75%, brief extraction ≥ 87%). For Tier D, `intendedSegmentId` holds the brief's target segment and `actualFitSegmentId` the crowd the references fit.
+- 2026-10-09 (slice 2): grader verified: `claude -p --setting-sources project` from an empty temp directory receives no CLAUDE.md, hooks or plugins. zod's `$schema` stamp must be stripped for `--json-schema`, and stdin must be closed.
+- 2026-10-09 (slice 2): the PRD's GO rule (two wins) already covers "specificity + preference", so "GO, reframed" is reported when exactly those two win and accuracy and mismatch don't. It's still a GO; the pitch changes.
+- 2026-10-09 (slice 2): stability is reported as the share of segment pairs within ±5 and one verdict step, with a 90% target for CrowdCraft (the PRD gave no share).
+- 2026-10-09 (slice 2 result): full baseline eval (19 ads × 2 arms × 2 runs, $0.16, 12 min). **Both baselines score 100% accuracy on every tier, including B and C, and catch 100% of mismatches.** Stability: B1 84% within ±5 (avg drift 2.8), B2 78% (3.0). Specificity: B1 0.9 / B2 1.8 specific claims per reaction. So accuracy and mismatch can only tie; the go/no-go rests on specificity (CrowdCraft needs ≥ 3.6) and blind preference. The eval set is too easy (famous references, far-apart segments). Proposed: a Tier E of "close crowds" inside one target (user to decide).
 

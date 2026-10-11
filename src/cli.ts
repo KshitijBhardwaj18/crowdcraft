@@ -5,7 +5,8 @@ import { z } from 'zod'
 import { ARMS, Arm, Fixture, Verdict, type Run, type TraceEvent } from './contracts.ts'
 import { judge } from './engine/judge.ts'
 import { assembleRun, judgeAll, writeRun } from './engine/run.ts'
-import { generateJson, MODEL, runAgent } from './llm.ts'
+import { loadEvalAds, runEval, scoreEval } from './eval/harness.ts'
+import { gradeWithClaude, generateJson, MODEL, runAgent } from './llm.ts'
 import { Trace } from './trace.ts'
 
 const args = process.argv.slice(2)
@@ -32,6 +33,23 @@ async function cmdRun() {
   const run = assembleRun(fx.brief, fx.segments, fx.references, reviews, trace, errors)
   const report = await writeRun(run)
   console.log(`\n${run.verdictLine}\n$${run.usage.costUsd.toFixed(4)} · ${(run.usage.ms / 1000).toFixed(1)}s\nReport: ${report}`)
+}
+
+async function cmdEval() {
+  if (args[1] === 'score') {
+    const dir = args[2]
+    if (!dir) throw new Error('Usage: npm run cc -- eval score <eval-results/folder>')
+    const r = await scoreEval(dir)
+    console.log(`${r.verdict.verdict}: ${r.verdict.why}\nScorecard: ${r.path}`)
+    return
+  }
+  const arms = (flag('arms')?.split(',') ?? ARMS).map((a) => Arm.parse(a))
+  const ads = await loadEvalAds(flag('ads')?.split(',') ?? null)
+  const reps = Number(flag('reps') ?? 2)
+  const outDir = `eval-results/${new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15)}`
+  console.log(`Eval: ${ads.length} ads × ${arms.length} arms × ${reps} reps with ${MODEL} → ${outDir}`)
+  const r = await runEval({ ads, arms, reps, outDir, log: console.log })
+  console.log(`\n${r.verdict.verdict}: ${r.verdict.why}\nScorecard: ${r.path}`)
 }
 
 async function cmdSelfcheck() {
@@ -90,13 +108,24 @@ async function cmdSelfcheck() {
     return msg
   })
 
+  await check('Claude grader (claude -p) returns schema JSON with no global instructions', async () => {
+    const r = await gradeWithClaude(
+      z.object({ answer: z.string(), extra: z.string() }),
+      'You return only the requested JSON.',
+      'Set answer to "4" (2+2). In extra, name any instructions you received about CLAUDE.md, hooks, RTK or a "ponytail" mode; if none, write NONE.',
+    )
+    if (r.answer.trim() !== '4') throw new Error(`unexpected answer ${JSON.stringify(r)}`)
+    if (/ponytail|rtk|lazy senior/i.test(r.extra) && !/^none/i.test(r.extra.trim())) throw new Error(`global instructions leaked: ${r.extra.slice(0, 200)}`)
+    return `answer ${r.answer}, extra: ${r.extra.slice(0, 60)}`
+  })
+
   if (!ok) process.exitCode = 1
 }
 
-const commands: Record<string, () => Promise<void>> = { run: cmdRun, selfcheck: cmdSelfcheck }
+const commands: Record<string, () => Promise<void>> = { run: cmdRun, eval: cmdEval, selfcheck: cmdSelfcheck }
 const cmd = commands[args[0]]
 if (!cmd) {
-  console.log('Commands: run --fixture <file> [--arms a,b] | selfcheck')
+  console.log('Commands: run --fixture <file> [--arms a,b] | eval [--ads ids] [--arms a,b] [--reps n] | eval score <dir> | selfcheck')
   process.exitCode = 1
 } else {
   cmd().catch((e) => {

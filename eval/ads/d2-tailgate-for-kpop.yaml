@@ -1,0 +1,66 @@
+# Tier D. Written without consulting Qloo. All brands are fictional.
+id: d2-tailgate-for-kpop
+tier: D
+briefText: |-
+  Ad copy for Bloom Bubble Tea, a fictional bubble-tea chain, running as a social post in the US, aimed at K-pop fans 16-24 in Los Angeles.
+
+  Truck bed down, Yeti full, Morgan Wallen on the speakers, and Yellowstone reruns when you get home. Bloom Bubble Tea: the official drink of the tailgate.
+brief:
+  adText: "Truck bed down, Yeti full, Morgan Wallen on the speakers, and Yellowstone reruns when you get home. Bloom Bubble Tea: the official drink of the tailgate."
+  adType: copy
+  channel: social
+  brandLine: Bloom Bubble Tea, a fictional bubble-tea chain
+  market:
+    country: US
+    region: null
+    city: null
+  target:
+    text: K-pop fans 16-24 in Los Angeles
+    ageBuckets:
+      - 24_and_younger
+    gender: null
+    interests: []
+    communities: []
+  unused: []
+segments:
+  - id: la-kpop
+    name: Los Angeles K-pop fans, 18-24
+    locationQuery: Los Angeles
+    ageBuckets:
+      - 24_and_younger
+    tagQueries:
+      - k-pop
+    entityQueries: []
+    gender: null
+  - id: nash-country
+    name: Nashville country fans, 25-34
+    locationQuery: Nashville
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - country music
+    entityQueries: []
+    gender: null
+  - id: bk-electronic
+    name: Brooklyn electronic-music fans, 25-34
+    locationQuery: Brooklyn
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - electronic music
+    entityQueries: []
+    gender: null
+  - id: sea-gamers
+    name: Seattle gamers, 18-29
+    locationQuery: Seattle
+    ageBuckets:
+      - 24_and_younger
+      - 25_to_29
+    tagQueries:
+      - video games
+    entityQueries: []
+    gender: null
+intendedSegmentId: la-kpop
+actualFitSegmentId: nash-country

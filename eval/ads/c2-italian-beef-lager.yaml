@@ -1,0 +1,78 @@
+# Tier C. Written without consulting Qloo. All brands are fictional.
+id: c2-italian-beef-lager
+tier: C
+briefText: |-
+  Script for Lakefront Lager, a fictional beer, running as a TV spot in the US, aimed at adults 25-54 in the US.
+
+  [0:00] A sports bar, fourth quarter, Bulls down by two.
+  VO: Some nights call for an Italian beef, dipped, with hot giardiniera.
+  [0:06] Cut to a candlelit natural-wine bar with a vinyl listening session.
+  VO: And some nights call for something a little more curated.
+  [0:11] Back at the bar, the crowd erupts.
+  VO: Lakefront Lager. Brewed for the 4th quarter.
+brief:
+  adText: |-
+    [0:00] A sports bar, fourth quarter, Bulls down by two.
+    VO: Some nights call for an Italian beef, dipped, with hot giardiniera.
+    [0:06] Cut to a candlelit natural-wine bar with a vinyl listening session.
+    VO: And some nights call for something a little more curated.
+    [0:11] Back at the bar, the crowd erupts.
+    VO: Lakefront Lager. Brewed for the 4th quarter.
+  adType: script
+  channel: tv
+  brandLine: Lakefront Lager, a fictional beer
+  market:
+    country: US
+    region: null
+    city: null
+  target:
+    text: adults 25-54 in the US
+    ageBuckets: null
+    gender: null
+    interests: []
+    communities: []
+  unused: []
+segments:
+  - id: chi-sports
+    name: Chicago sports fans, 35-54
+    locationQuery: Chicago
+    ageBuckets:
+      - 35_to_44
+      - 45_to_54
+    tagQueries:
+      - basketball
+    entityQueries:
+      - Chicago Bulls
+    gender: null
+  - id: austin-indie
+    name: Austin indie-music fans, 25-34
+    locationQuery: Austin
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - indie rock
+    entityQueries: []
+    gender: null
+  - id: bk-electronic
+    name: Brooklyn electronic-music fans, 25-34
+    locationQuery: Brooklyn
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - electronic music
+    entityQueries: []
+    gender: null
+  - id: miami-latin
+    name: Miami reggaeton fans, 25-34
+    locationQuery: Miami
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - reggaeton
+    entityQueries: []
+    gender: null
+intendedSegmentId: chi-sports
+actualFitSegmentId: null

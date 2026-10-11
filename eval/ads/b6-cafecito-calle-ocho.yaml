@@ -1,0 +1,76 @@
+# Tier B. Written without consulting Qloo. All brands are fictional.
+id: b6-cafecito-calle-ocho
+tier: B
+briefText: |-
+  Ad copy for Ventana Cold Brew, a fictional coffee brand, running as a social post in the US, aimed at adults 21-34 in the US.
+
+  Cafecito energy, cold brew convenience. For the morning after a Rauw Alejandro set, the walk down Calle Ocho, and the Wynwood brunch that turns into dinner. Ventana Cold Brew. Pa' la calle.
+brief:
+  adText: Cafecito energy, cold brew convenience. For the morning after a Rauw Alejandro set, the walk down Calle Ocho, and the Wynwood brunch that turns into dinner. Ventana Cold Brew. Pa' la calle.
+  adType: copy
+  channel: social
+  brandLine: Ventana Cold Brew, a fictional coffee brand
+  market:
+    country: US
+    region: null
+    city: null
+  target:
+    text: adults 21-34 in the US
+    ageBuckets: null
+    gender: null
+    interests: []
+    communities: []
+  unused: []
+segments:
+  - id: miami-latin
+    name: Miami reggaeton fans, 25-34
+    locationQuery: Miami
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - reggaeton
+    entityQueries: []
+    gender: null
+  - id: nash-country
+    name: Nashville country fans, 25-34
+    locationQuery: Nashville
+    ageBuckets:
+      - 25_to_29
+      - 30_to_34
+    tagQueries:
+      - country music
+    entityQueries: []
+    gender: null
+  - id: sea-gamers
+    name: Seattle gamers, 18-29
+    locationQuery: Seattle
+    ageBuckets:
+      - 24_and_younger
+      - 25_to_29
+    tagQueries:
+      - video games
+    entityQueries: []
+    gender: null
+  - id: mpls-diy
+    name: Minneapolis home-and-DIY fans, 35-54
+    locationQuery: Minneapolis
+    ageBuckets:
+      - 35_to_44
+      - 45_to_54
+    tagQueries:
+      - home improvement
+    entityQueries: []
+    gender: null
+  - id: denver-outdoors
+    name: Denver outdoor-adventure fans, 30-44
+    locationQuery: Denver
+    ageBuckets:
+      - 30_to_34
+      - 35_to_44
+    tagQueries:
+      - hiking
+    entityQueries: []
+    gender: null
+intendedSegmentId: miami-latin
+actualFitSegmentId: null

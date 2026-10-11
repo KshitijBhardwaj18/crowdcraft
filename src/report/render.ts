@@ -1,7 +1,7 @@
 // Run → one self-contained HTML file (prd.md > Run Report (HTML)). Verdict first, Qloo detail below.
 import type { Arm, Highlight, Reference, Review, Run, Segment } from '../contracts.ts'
 
-const esc = (s: unknown) =>
+export const esc = (s: unknown) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 
 const ARM_LABEL: Record<Arm, string> = {
@@ -140,7 +140,7 @@ ${referencesTable(run)}
 </main></body></html>`
 }
 
-const CSS = `
+export const CSS = `
 :root{--bg:#fafaf7;--fg:#1d1d1b;--muted:#6b6b66;--card:#fff;--line:#e4e2dc;--love:#1f8a4c;--like:#3a7d8c;--meh:#8a8780;--skip:#c0392b;--lands:#c9f0d4;--loses:#f7d0cb;--chip:#efede7;--accent:#5b4bd6}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#161615;--fg:#ecebe6;--muted:#9a9890;--card:#1f1f1d;--line:#33322f;--lands:#1f4d31;--loses:#5a2620;--chip:#2b2a27}}
 :root[data-theme=dark]{--bg:#161615;--fg:#ecebe6;--muted:#9a9890;--card:#1f1f1d;--line:#33322f;--lands:#1f4d31;--loses:#5a2620;--chip:#2b2a27}

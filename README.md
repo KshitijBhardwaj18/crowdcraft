@@ -18,13 +18,15 @@ cp .env.example .env   # add QLOO_API_KEY (Qloo hackathon) and META_API_KEY (Met
 ## Commands
 
 ```bash
-npm run cc -- selfcheck                                         # checks Muse structured output, the agent tool loop and judge drift
+npm run cc -- selfcheck                                         # checks Muse, the agent tool loop, judge drift and the Claude grader
 npm run cc -- run --fixture test/fixtures/concert.fixture.json  # judge a hand-made segment set, all four arms
+npm run cc -- eval --arms b1_named,b2_invented                  # eval set through the baselines; writes eval-results/<timestamp>/scorecard.html
+npm run cc -- eval score eval-results/<timestamp>               # after filling the choice column in blind-pairs.csv
 npm test                                                        # unit tests
 npm run typecheck
 ```
 
-Each run writes `runs/<id>/run.json` and a self-contained `runs/<id>/report.html`.
+Each run writes `runs/<id>/run.json` and a self-contained `runs/<id>/report.html`. The eval set lives in `eval/ads/` (fictional brands, written without consulting Qloo). The grader uses the Claude Code CLI (`claude -p`) on your own subscription.
 
 Qloo responses are cached locally and never committed (Qloo terms). Results are directional, not guaranteed.
 

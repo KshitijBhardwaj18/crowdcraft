@@ -171,7 +171,7 @@ One static file per run, ordered verdict first so it can be shown to someone non
 - **Caching**: Qloo responses are cached locally for speed and repeatability, and kept out of the repo (Qloo terms).
 
 ## Look and Feel
-- **Run report**: clean, readable and printable, verdict first, Qloo detail below. It doesn't need to be beautiful, but you should be happy to show it to a teammate or a judge.
+- **Run report**: one page, beautiful and built for analysis. Verdict first; then a **segment grid** (all segments side by side, each with its verdict, a letter grade from the ranking score, and a visual); click into a segment for its reaction, highlights and sources; Qloo detail below. Pleasant enough to show a judge.
 - **Console**: short progress lines that mirror the trace, e.g. "✓ 9 candidates → keeping 5". Errors say what went wrong and what to do next.
 
 ## Acceptance Criteria
