@@ -6,6 +6,7 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
+import type { TraceEvent } from './contracts.ts'
 import { limiter, type Trace } from './trace.ts'
 
 export const MODEL = process.env.MUSE_MODEL ?? 'muse-spark-1.3-contributor'
@@ -24,9 +25,9 @@ const muse = createOpenAICompatible({
 const gate = limiter(8, 750)
 
 type Effort = 'minimal' | 'low' | 'medium' | 'high'
-type CallOpts = { system: string; prompt: string; temperature?: number; effort?: Effort; trace?: Trace; label?: string }
+type CallOpts = { system: string; prompt: string; temperature?: number; effort?: Effort; trace?: Trace; label?: string; stage?: TraceEvent['stage'] }
 
-function meter(trace: Trace | undefined, label: string, u: { inputTokens?: number; outputTokens?: number }, steps = 1) {
+function meter(trace: Trace | undefined, label: string, u: { inputTokens?: number; outputTokens?: number }, steps = 1, stage: TraceEvent['stage'] = 'judge') {
   if (!trace) return
   const tin = u.inputTokens ?? 0
   const tout = u.outputTokens ?? 0
@@ -34,12 +35,17 @@ function meter(trace: Trace | undefined, label: string, u: { inputTokens?: numbe
   trace.usage.tokensIn += tin
   trace.usage.tokensOut += tout
   trace.usage.costUsd += (tin * PRICE_IN + tout * PRICE_OUT) / 1e6
-  trace.add('judge', 'llm_call', label, { model: MODEL, tokensIn: tin, tokensOut: tout, steps })
+  trace.add(stage, 'llm_call', label, { model: MODEL, tokensIn: tin, tokensOut: tout, steps })
 }
 
 const providerOptions = (effort: Effort) => ({ meta: { reasoningEffort: effort, strictJsonSchema: true } })
 
+function requireKey() {
+  if (!process.env.META_API_KEY) throw new Error('META_API_KEY is not set. Add it to .env (see .env.example).')
+}
+
 export async function generateJson<T>(schema: z.ZodType<T>, o: CallOpts): Promise<T> {
+  requireKey()
   const r = await gate(() =>
     generateText({
       model: muse(MODEL),
@@ -51,7 +57,7 @@ export async function generateJson<T>(schema: z.ZodType<T>, o: CallOpts): Promis
       maxRetries: 3,
     }),
   )
-  meter(o.trace, o.label ?? 'LLM call', r.usage)
+  meter(o.trace, o.label ?? 'LLM call', r.usage, 1, o.stage)
   return r.output as T
 }
 
@@ -60,6 +66,7 @@ export async function generateJson<T>(schema: z.ZodType<T>, o: CallOpts): Promis
 export async function runAgent<T>(
   o: CallOpts & { tools: ToolSet; output: z.ZodType<T>; maxSteps?: number },
 ): Promise<{ result: T; steps: number; finished: boolean }> {
+  requireKey()
   const finish = tool({ description: 'Call exactly once, with your final answer, when you are done.', inputSchema: o.output, strict: true })
   const r = await gate(() =>
     generateText({
@@ -73,7 +80,7 @@ export async function runAgent<T>(
       maxRetries: 3,
     }),
   )
-  meter(o.trace, o.label ?? 'Agent run', r.totalUsage, r.steps.length)
+  meter(o.trace, o.label ?? 'Agent run', r.totalUsage, r.steps.length, o.stage)
   const call = r.steps.flatMap((s) => s.toolCalls).find((c) => c.toolName === 'finish')
   const parsed = call ? o.output.safeParse(call.input) : null
   if (parsed?.success) return { result: parsed.data, steps: r.steps.length, finished: true }
@@ -83,7 +90,7 @@ export async function runAgent<T>(
     .join('\n')
     .slice(-12000)
   const problem = parsed ? `Your finish answer did not fit the required format: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}\nYour answer was: ${JSON.stringify(call!.input)}` : `You stopped without calling finish. Your last message: ${r.text}`
-  o.trace?.add('judge', 'warning', `${o.label ?? 'Agent run'}: repairing the final answer`, { problem: problem.slice(0, 500) })
+  o.trace?.add(o.stage ?? 'judge', 'warning', `${o.label ?? 'Agent run'}: repairing the final answer`, { problem: problem.slice(0, 500) })
   const result = await generateJson(o.output, {
     ...o,
     prompt: `${o.prompt}\n\nTool results so far:\n${transcript}\n\n${problem}\n\nReturn your final answer now, using only IDs from the tool results.`,
@@ -111,11 +118,14 @@ export async function gradeWithClaude<T>(schema: z.ZodType<T>, system: string, p
     '--tools', '',
     '--output-format', 'json',
     '--json-schema', JSON.stringify(jsonSchema),
+    '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
   ]
+  // A minimal environment: the grader needs its own login, never our API keys.
+  const env = Object.fromEntries(['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG', 'TERM'].filter((k) => process.env[k]).map((k) => [k, process.env[k]!]))
   const stdout = await graderGate(
     () =>
       new Promise<string>((resolve, reject) =>
-        execFile('claude', args, { cwd, maxBuffer: 32 * 1024 * 1024, timeout: 300_000 }, (err, out, errOut) =>
+        execFile('claude', args, { cwd, env, maxBuffer: 32 * 1024 * 1024, timeout: 300_000 }, (err, out, errOut) =>
           err ? reject(new Error(`claude -p failed: ${errOut || err.message}`)) : resolve(out),
         ).stdin?.end(), // no stdin, or claude waits 3s for it
       ),

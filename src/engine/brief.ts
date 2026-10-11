@@ -1,7 +1,7 @@
 // Brief stage (spec.md > Brief stage): the brief's target → verified Qloo signals, via an agent with lookup tools.
 import { z } from 'zod'
-import { AgeBucket, type Brief, type QlooSignals } from '../contracts.ts'
-import { runAgent } from '../llm.ts'
+import { AgeBucket, Channel, type Brief, type QlooSignals } from '../contracts.ts'
+import { generateJson, runAgent } from '../llm.ts'
 import type { Ctx } from '../qloo/client.ts'
 import { keepKnownIds, qlooTools, type ToolRegistry } from '../qloo/tools.ts'
 
@@ -36,9 +36,67 @@ Then call finish.`,
     maxSteps: 10,
     trace: ctx.trace,
     label: 'Agent maps the brief to Qloo signals',
+    stage: 'signals',
   })
   const { signals, dropped } = keepKnownIds({ ...result, locationId: null }, reg)
   if (dropped.length) ctx.trace?.add('signals', 'warning', `Dropped ${dropped.length} IDs the tools never returned`, { dropped })
   ctx.trace?.add('signals', 'decision', `Understood the audience as: ${result.understanding}`, { steps, signals })
   return { signals, understanding: result.understanding }
+}
+
+// Free text → Brief (prd.md > Brief): the LLM structures it; code checks required fields, language and length.
+const Parsed = z.object({
+  language: z.string().describe('ISO 639-1 code of the ad text, e.g. "en"'),
+  adText: z.string().nullable().describe('The ad itself, copied verbatim (not the brief around it), or null if there is no ad'),
+  adType: z.enum(['copy', 'script']),
+  channel: Channel,
+  brandLine: z.string().nullable().describe('One line: who is advertising what'),
+  market: z.object({ country: z.string().nullable(), region: z.string().nullable(), city: z.string().nullable() }),
+  target: z.object({
+    text: z.string().nullable().describe('Who the ad is for, in plain words'),
+    ageBuckets: z.array(AgeBucket).nullable(),
+    gender: z.enum(['male', 'female']).nullable(),
+    interests: z.array(z.string()),
+    communities: z.array(z.string()).describe('Only communities the brief names explicitly as communities'),
+  }),
+  unused: z.array(z.object({ phrase: z.string(), reason: z.string() })),
+})
+
+export type ParsedBrief = { brief: Brief | null; missing: string[]; warnings: string[]; error: string | null }
+
+export async function parseBrief(text: string, trace?: Ctx['trace']): Promise<ParsedBrief> {
+  const p = await generateJson(Parsed, {
+    system: `You turn a marketer's free-text brief into structured fields. Copy the ad verbatim. ${POLICY}
+Ethnicity, race, religion, sexuality or political targeting goes in "unused" with the reason "CrowdCraft never targets or splits by this; describe tastes instead". Anything else you can't map to the fields (e.g. income) also goes in "unused" with a short reason.
+Map ages to these buckets: 24_and_younger, 25_to_29, 30_to_34, 35_to_44, 45_to_54, 55_and_older. Channel: reel (Instagram or TikTok), preroll (YouTube), tv, audio (radio or podcast), billboard, social, email, or general.
+Market: use the place the brief sets for the campaign or the event (e.g. "runs in Chicago" → country US, city Chicago); if it names no place at all, leave it null. Target: who the brief says it's for; null if it doesn't say. Never invent either.`,
+    prompt: text,
+    trace,
+    label: 'Structure the free-text brief',
+    stage: 'brief',
+  })
+  const missing = [!p.adText && 'the ad itself', !p.market.country && 'where it runs (market)', !p.target.text && 'who it is for (target audience)'].filter(
+    (x): x is string => !!x,
+  )
+  if (p.adText && !p.language.trim().toLowerCase().startsWith('en')) return { brief: null, missing, warnings: [], error: `M1 judges English ads only (this one looks like "${p.language}").` }
+  const check = p.adText ? validateAd(p.adText) : { error: null, warnings: [] }
+  if (check.error) return { brief: null, missing, warnings: [], error: check.error }
+  const warnings = check.warnings
+  if (missing.length) return { brief: null, missing, warnings, error: null }
+  const brief: Brief = {
+    adText: p.adText!,
+    adType: p.adType,
+    channel: p.channel,
+    brandLine: p.brandLine,
+    market: { country: p.market.country!, region: p.market.region, city: p.market.city },
+    target: { ...p.target, text: p.target.text! },
+    unused: p.unused,
+  }
+  return { brief, missing, warnings, error: null }
+}
+
+// Length rules for every brief, from free text or a file (prd.md > States and Edge Cases).
+export function validateAd(adText: string): { error: string | null; warnings: string[] } {
+  if (adText.length > 5000) return { error: `The ad is ${adText.length} characters; the limit is 5,000.`, warnings: [] }
+  return { error: null, warnings: adText.trim().split(/\s+/).length < 10 ? ['The ad is under 10 words, so reactions will be thin.'] : [] }
 }

@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import type { Review } from '../contracts.ts'
 import { gradeWithClaude } from '../llm.ts'
+import { shuffle } from '../trace.ts'
 
 export type Grade = { specific: number; generic: number }
 
@@ -20,10 +21,11 @@ export async function gradeSpecificity(
   batchSize = 12,
 ): Promise<Map<string, Grade>> {
   const grades = new Map<string, Grade>()
-  const shuffled = [...items].sort(() => Math.random() - 0.5)
+  const shuffled = shuffle(items)
   const batches: (typeof items)[] = []
   for (let i = 0; i < shuffled.length; i += batchSize) batches.push(shuffled.slice(i, i + batchSize))
-  await Promise.all(
+  // One failed batch leaves its reviews ungraded (the metric skips them); it never sinks the eval.
+  const results = await Promise.allSettled(
     batches.map(async (batch) => {
       const ids = new Map(batch.map((it, i) => [`r${i + 1}`, it.key]))
       const prompt = batch
@@ -39,5 +41,7 @@ export async function gradeSpecificity(
       }
     }),
   )
+  const failed = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[]
+  if (failed.length) console.log(`! ${failed.length} of ${batches.length} grading batches failed (${String(failed[0].reason?.message ?? failed[0].reason).slice(0, 120)}); those reviews stay ungraded`)
   return grades
 }

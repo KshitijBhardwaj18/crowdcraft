@@ -32,24 +32,6 @@ export async function affinityMatrix(fps: Fingerprint[], cols: Column[], ctx: Ct
   )
 }
 
-export function pearson(a: number[], b: number[]): number {
-  const n = a.length
-  const ma = a.reduce((s, x) => s + x, 0) / n
-  const mb = b.reduce((s, x) => s + x, 0) / n
-  let num = 0
-  let da = 0
-  let db = 0
-  for (let i = 0; i < n; i++) {
-    num += (a[i] - ma) * (b[i] - mb)
-    da += (a[i] - ma) ** 2
-    db += (b[i] - mb) ** 2
-  }
-  return da && db ? num / Math.sqrt(da * db) : 0
-}
-
-// Distance in [0, 1]: 0 = identical taste pattern, 1 = opposite. (1 − r) / 2.
-export const distanceMatrix = (rows: number[][]) => rows.map((a) => rows.map((b) => (a === b ? 0 : (1 - pearson(a, b)) / 2)))
-
 // Greedy max-min: start with the richest candidate, add the one farthest from everything kept,
 // stop at `max`, or when the next is closer than `stopAt` (but keep at least `min` when possible, never fewer than 2).
 export function greedySelect(dist: number[][], richness: number[], o = { max: 6, min: 4, stopAt: STOP_DISTANCE }): number[] {
@@ -113,15 +95,16 @@ const AGE: Record<string, string> = { '24_and_younger': '24 and under', '25_to_2
 
 // Describe the cells (spec.md > D4b, D4): one affinity matrix across all cells gives each its distinctive items;
 // themes and Analysis Compare say what sets it apart. Cells are kept as built: they are what the marketer buys.
-export async function describeSegments(fps: Fingerprint[], ctx: Ctx, reg: ToolRegistry): Promise<{ segments: Segment[]; overlap: number }> {
+export async function describeSegments(fps: Fingerprint[], ctx: Ctx, reg: ToolRegistry): Promise<{ segments: Segment[]; overlap: number; degraded: boolean }> {
+  let degraded = false
   const cols = buildPool(fps)
   const rows = await affinityMatrix(fps, cols, ctx)
   const kept = fps.map((_, i) => i)
   ctx.trace?.add('select', 'decision', `Scored ${fps.length} audiences on ${cols.length} shared taste items to find what each loves more than the others`)
   const items = distinctiveItems(kept, rows, cols, fps.map((f) => new Set(FP_DOMAINS.flatMap((d) => f.top[d].map((x) => x.qlooId)))))
   // Cells in the same region share taste by design (D4b); the distinctness target applies across regions.
-  const regionsOf = [...new Set(fps.map((f) => f.cand.region))]
-  const cross = regionsOf.length > 1 ? Math.max(...regionsOf.flatMap((a, i) => regionsOf.slice(i + 1).map((b) => maxOverlap(fps.filter((f) => f.cand.region === a || f.cand.region === b), (x, y) => x.cand.region !== y.cand.region)))) : maxOverlap(fps)
+  const multiRegion = new Set(fps.map((f) => f.cand.region)).size > 1
+  const cross = multiRegion ? maxOverlap(fps, (x, y) => x.cand.region !== y.cand.region) : maxOverlap(fps)
   const same = maxOverlap(fps, (x, y) => x.cand.region === y.cand.region)
   const overlap = cross
   ctx.trace?.add('select', 'decision', `Worst overlap of top items across regions: ${(cross * 100).toFixed(0)}% (target ≤ 30%); within a region (age bands): ${(same * 100).toFixed(0)}%`)
@@ -131,11 +114,13 @@ export async function describeSegments(fps: Fingerprint[], ctx: Ctx, reg: ToolRe
   const segments = await Promise.all(
     fps.map(async (fp, i) => {
       const others = items.filter((_, j) => j !== i).flat()
-      const apart = (await setsApart(items[i].map((x) => x.qlooId), others.map((x) => x.qlooId), ctx).catch(() => [])).filter(
-        (t, k, all) => !isSensitiveTag(t.name) && all.findIndex((u) => u.name.toLowerCase() === t.name.toLowerCase()) === k,
+      const apart = (
+        await setsApart(items[i].map((x) => x.qlooId), others.map((x) => x.qlooId), ctx).catch(() => ((degraded = true), []))
+      ).filter(
+        (t, k, all) => !isSensitiveTag(t.name, t.qlooId) && all.findIndex((u) => u.name.toLowerCase() === t.name.toLowerCase()) === k,
       )
       // The brief's own interest tags are shared by every cell, so they explain nothing about this one.
-      const themes = fp.themes.filter((t) => !isSensitiveTag(t.name) && !fp.cand.signals.tagIds.includes(t.qlooId)).filter((t) => themeSets.filter((s, j) => j !== i && s.has(t.qlooId)).length < (fps.length - 1) / 2).slice(0, 5)
+      const themes = fp.themes.filter((t) => !isSensitiveTag(t.name, t.qlooId) && !fp.cand.signals.tagIds.includes(t.qlooId)).filter((t) => themeSets.filter((s, j) => j !== i && s.has(t.qlooId)).length < (fps.length - 1) / 2).slice(0, 5)
       let id = fp.cand.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
       while (ids.has(id)) id += '-2'
       ids.add(id)
@@ -163,5 +148,5 @@ export async function describeSegments(fps: Fingerprint[], ctx: Ctx, reg: ToolRe
       return segment
     }),
   )
-  return { segments, overlap }
+  return { segments, overlap, degraded }
 }

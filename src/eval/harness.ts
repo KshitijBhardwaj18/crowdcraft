@@ -30,7 +30,7 @@ export async function loadEvalAds(filter: string[] | null, dir = 'eval/ads'): Pr
   return filter ? ads.filter((a) => filter.some((p) => a.id.startsWith(p))) : ads
 }
 
-type State = { createdAt: string; arms: Arm[]; cases: { adId: string; runs: string[] }[]; grades: Record<string, Grade>; costUsd: number; minutes: number }
+type State = { createdAt: string; arms: Arm[]; cases: { adId: string; runs: string[]; ad?: EvalAd }[]; grades: Record<string, Grade>; costUsd: number; minutes: number }
 
 export async function runEval(o: { ads: EvalAd[]; arms: Arm[]; reps: number; outDir: string; log: (s: string) => void }) {
   const t0 = Date.now()
@@ -57,6 +57,17 @@ export async function runEval(o: { ads: EvalAd[]; arms: Arm[]; reps: number; out
     }),
   )
 
+  // Save the state before grading, so a grading failure never loses the runs (`eval score` can rebuild the scorecard).
+  const state: State = {
+    createdAt: new Date(t0).toISOString(),
+    arms: o.arms,
+    cases: cases.map((c) => ({ adId: c.ad.id, runs: c.runs.map((r) => path.join('runs', r.id, 'run.json')), ad: c.ad })),
+    grades: {},
+    costUsd: cases.flatMap((c) => c.runs).reduce((s, r) => s + r.usage.costUsd, 0),
+    minutes: 0,
+  }
+  await writeFile(path.join(o.outDir, 'eval-state.json'), JSON.stringify(state, null, 2))
+
   o.log('Grading specificity with Claude…')
   const scored = cases.filter((c) => c.ad.tier !== 'demo')
   const grades = await gradeSpecificity(
@@ -72,14 +83,8 @@ export async function runEval(o: { ads: EvalAd[]; arms: Arm[]; reps: number; out
   )
   const pairs = await exportBlindPairs(o.outDir, candidates)
 
-  const state: State = {
-    createdAt: new Date(t0).toISOString(),
-    arms: o.arms,
-    cases: cases.map((c) => ({ adId: c.ad.id, runs: c.runs.map((r) => path.join('runs', r.id, 'run.json')) })),
-    grades: Object.fromEntries(grades),
-    costUsd: cases.flatMap((c) => c.runs).reduce((s, r) => s + r.usage.costUsd, 0),
-    minutes: (Date.now() - t0) / 60000,
-  }
+  state.grades = Object.fromEntries(grades)
+  state.minutes = (Date.now() - t0) / 60000
   await writeFile(path.join(o.outDir, 'eval-state.json'), JSON.stringify(state, null, 2))
   const scorecard = await writeScorecard(o.outDir, state, cases, null)
   o.log(`Exported ${pairs} blind pairs.`)
@@ -93,7 +98,10 @@ export async function scoreEval(dir: string) {
   const cases: EvalCase[] = await Promise.all(
     state.cases.map(async (c) => {
       const runs = await Promise.all(c.runs.map(async (p) => Run.parse(JSON.parse(await readFile(path.join(dir, p), 'utf8')))))
-      return { ad: ads.get(c.adId)!, runs, reportPaths: c.runs.map((p) => p.replace(/run\.json$/, 'report.html')) }
+      // The snapshot taken at eval time wins, so edited or renamed ad files can't re-label old runs.
+      const ad = c.ad ?? ads.get(c.adId)
+      if (!ad) throw new Error(`Eval ad ${c.adId} is missing from eval-state.json and eval/ads; can't score this eval.`)
+      return { ad, runs, reportPaths: c.runs.map((p) => p.replace(/run\.json$/, 'report.html')) }
     }),
   )
   return writeScorecard(dir, state, cases, await readBlindChoices(dir))

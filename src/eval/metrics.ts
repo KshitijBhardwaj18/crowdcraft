@@ -127,6 +127,8 @@ export function goNoGo(metrics: Metric[], hasCrowdcraft: boolean): { verdict: st
   const m = (id: string) => metrics.find((x) => x.id === id)?.pass ?? null
   const gates = ['stability', 'sourcing'].filter((g) => m(g) === false)
   if (gates.length) return { verdict: 'NOT YET', why: `Gate failing: ${gates.join(', ')}. Fix before judging the result.` }
+  const unmeasured = ['stability', 'sourcing'].filter((g) => m(g) === null)
+  if (unmeasured.length) return { verdict: 'PENDING', why: `Gate not measured: ${unmeasured.join(', ')} (e.g. run with --reps 2).` }
   const wins = ['accuracy_bc', 'mismatch', 'specificity', 'blind'].filter((w) => m(w) === true)
   const open = ['accuracy_bc', 'mismatch', 'specificity', 'blind'].filter((w) => m(w) === null)
   const reframed = m('specificity') === true && m('blind') === true && m('accuracy_bc') !== true && m('mismatch') !== true
@@ -156,7 +158,8 @@ export function renderScorecard(cases: EvalCase[], arms: Arm[], result: ReturnTy
         const i = rs.find((r) => r.segmentId === c.ad.intendedSegmentId)
         return `<td>${hit ? '✓ ' : ''}${esc(top.segmentId)}${i ? `<br><span class="small">target: <span class="v-${i.verdict}"><b>${i.verdict}</b></span> ${i.rankingScore}</span>` : ''}</td>`
       })
-      return `<tr><td><a href="${esc(c.reportPaths[0])}">${esc(c.ad.id)}</a></td><td>${esc(c.ad.tier)}</td><td class="small">${esc(c.ad.intendedSegmentId ?? '—')}${c.ad.actualFitSegmentId ? `<br>real fit: ${esc(c.ad.actualFitSegmentId)}` : ''}</td>${cells.join('')}</tr>`
+      const failed = c.runs.reduce((n, r) => n + r.errors.length, 0)
+      return `<tr><td><a href="${esc(c.reportPaths[0])}">${esc(c.ad.id)}</a>${failed ? `<br><span class="v-skip small">${failed} failed reviews</span>` : ''}</td><td>${esc(c.ad.tier)}</td><td class="small">${esc(c.ad.intendedSegmentId ?? '—')}${c.ad.actualFitSegmentId ? `<br>real fit: ${esc(c.ad.actualFitSegmentId)}` : ''}</td>${cells.join('')}</tr>`
     })
     .join('')
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CrowdCraft Eval Scorecard</title><style>${CSS}</style></head><body><main>

@@ -1,6 +1,6 @@
 ---
 doc: checklist
-status: approved
+status: done
 ---
 # M1: Taste Engine Validation — Build Checklist
 
@@ -33,7 +33,7 @@ status: approved
   Try it: open `probe-results/<timestamp>/coverage.html`.
   Commit: `feat: Qloo client, API assumption checks and coverage probe`
 
-- [ ] **4. A brief becomes real, distinct Qloo segments**
+- [x] **4. A brief becomes real, distinct Qloo segments**
   Delivers: `run` takes a brief, turns it into verified Qloo signals (agent), proposes and broadens candidates (agent), builds fingerprints and the affinity matrix, and keeps the 4–6 most distinct segments with their distinctive items and "what sets them apart". The judge uses them, without references yet.
   Why now: segments are the kernel's foundation, and this is the first real look at it.
   Refs: `prd.md > Brief`, `prd.md > Agent Flow (how Qloo is used)`, `prd.md > Segment`, `spec.md > D2: How agentic the engine is — decided`, `spec.md > D4: Segment building and distinctness — decided`, `spec.md > Qloo agent tools (new) — src/qloo/tools.ts`, `spec.md > Brief stage (new) — src/engine/brief.ts`, `spec.md > Candidates stage (new) — src/engine/candidates.ts`, `spec.md > Fingerprints and selection (new) — src/engine/fingerprints.ts, src/engine/select.ts`, `spec.md > Policy additions`
@@ -42,7 +42,7 @@ status: approved
   Try it: open the report. Do the segments feel like real, different crowds, and is the page pleasant and easy to analyse?
   Commit: `feat: brief to Qloo signals, candidate agent and affinity-matrix segments`
 
-- [ ] **5. The full CrowdCraft review, with the ad's references scored by Qloo**
+- [x] **5. The full CrowdCraft review, with the ad's references scored by Qloo**
   Delivers: references are extracted and resolved (agent), fit is scored per segment with demographic skew, the ranking score uses it, and the report is complete. `run --text` works from free text and asks for missing fields.
   Why now: it completes the kernel. Every PRD report section and run-level acceptance criterion can now be checked.
   Refs: `prd.md > Core Journey`, `prd.md > Review (per segment)`, `prd.md > Run Report (HTML)`, `prd.md > States and Edge Cases`, `spec.md > References stage (new) — src/engine/references.ts`, `spec.md > Run orchestrator and trace (new) — src/engine/run.ts`, `spec.md > Report (new) — src/report/render.ts`
@@ -51,7 +51,7 @@ status: approved
   Try it: run your own ad with `npm run cc -- run --text "…"` and read the report.
   Commit: `feat: reference resolution and fit, complete run report, free-text briefs`
 
-- [ ] **6. Get the go/no-go**
+- [x] **6. Get the go/no-go** — moved to M2 as a parallel workstream (user, 2026-10-09); the harness and baseline scorecard exist from slice 2
   Delivers: `eval` runs all four arms on Qloo-resolved fixed segments (twice, for stability), evaluates segmentation and brief extraction separately, measures invented-vs-real taste, and produces the full scorecard with a go/no-go. `eval score` folds in your blind ratings.
   Why now: it needs everything above. It answers the milestone's question.
   Refs: `prd.md > Eval Command and Scorecard`, `prd.md > Acceptance Criteria`, `scope.md > Done Looks Like`, `spec.md > Eval harness (new) — src/eval/harness.ts, src/eval/metrics.ts, src/eval/grader.ts, src/eval/blind.ts`
@@ -62,16 +62,23 @@ status: approved
 
 ## Final Review
 
-- [ ] Hands-on review done, agreed fixes made, user confirms it's ready
+- [x] Hands-on review done, agreed fixes made, user confirms it's ready (user reviewed the dashboards; fixes made in slices 4–5; "yes, let's build this")
+- Code review (5 fresh reviewers, one per stacked PR, 2026-10-09). User approved the triage: "fix everything". Outcomes:
+  - PR #1 (judge): every LLM call traced as "judge" → **fixed** (stage per call); evidence vs score disagreement on missing keys → **fixed** (one rule); invented source IDs next to valid ones → **fixed** (kept, logged in dropped); missing META key fails late → **fixed** (fail fast); engines range → **fixed** (>=22.9); malformed finish crash → dismissed (fixed in slice 4); unicode position shift → deferred (English-only in M1); missing evidence tests → deferred (eval workstream); fixture-only header duplication → dismissed (dashboard rebuilt); gate counts agent loops as one start → deferred (noted, no nesting today).
+  - PR #2 (eval): null gates counted as pass → **fixed** (PENDING, tested); one grader failure lost the eval → **fixed** (allSettled, state saved before grading); BOM breaks blind choices → **fixed** (tested); --reps unvalidated → **fixed**; eval score reads live ads → **fixed** (snapshot in state); failed reviews hidden → **fixed** (shown per ad); grader isolation → **fixed** (--strict-mcp-config, empty MCP config, minimal env without our keys); CSV formula injection → **fixed** (tested); biased shuffle → **fixed** (Fisher–Yates); grader cost not counted, --ads glob wording → deferred; Tier B ads too famous → deferred to the M2 eval workstream (Tier E decision).
+  - PR #3 (Qloo): fit counted unrequested IDs → **fixed**; probe treated API errors as no coverage, empty US list inflated local specificity, unresolved taste tag silent → **fixed**; retries/backoff/timeouts → **fixed** (network errors retried, exponential with Retry-After, 30s timeout); entityDetails unchunked → **fixed** (removed, unused); missing quota header read as 0 → **fixed**; failed calls not traced → **fixed** (error events) and concurrent identical calls → **fixed** (shared in flight); probe thresholds undocumented → recorded here: Good = fill ≥ 80%, distinctness ≥ 50%, local ≥ 30%, Thin = fill ≥ 50%; cache key order → **fixed** (sorted lists); probe tests → deferred.
+  - PR #4 (segments): sensitive-tag blocklist holes ("Mexican-American", "Faith-Oriented", "Asian-owned", "Progressive", LGBTQIA+) and over-blocking ("Black Metal") → **fixed** (Qloo namespace blocking + wider word list, tested; audience names checked; community unlock needs an exact, non-empty name); regions not checked against the market → **fixed** (country/state check); unresolved single city → **fixed** (flagged broadened); report overwrote non-run.json input → **fixed**; table sort bugs → dismissed (Next.js dashboard replaces it in M2); agent gender leaking into region ranking → **fixed**; repair warnings labelled judge → **fixed**; cache replay looked like live calls → **fixed** (labelled "replayed from cache"); failed Compare cached forever → **fixed** (degraded results not cached); dead code → **fixed** (pearson/distanceMatrix removed, cross simplified); line split on "$4.99"/"St. Louis" → **fixed** (tested); gapped age band labels → dismissed (bands are contiguous by construction).
+  - PR #5 (deliverables): better-version lift inflated by reference fit → **fixed** (judgement and fit shown separately with a caveat; first run showed San Antonio 64 → 75 came entirely from fit, judgement 78 → 78); references failure killed the run → **fixed** (falls back to taste only); judge told the wrong fit scale → **fixed**; small-metro heat → deferred (tune with data in M2); YAML briefs skipped length checks → **fixed** (shared validateAd); non-US warning missing → **fixed**; language check fragile → **fixed**; extracted ad paraphrase check → deferred; --same-segments showed the old heatmap → **fixed** (cleared); README quota understated → **fixed** (150–200 per fresh run), demographics skipped for versions → **fixed**; rewrite constraints unchecked → deferred; heat panel wording and fit colour floor → **fixed**; null-type entities → deferred.
+
 
 ## Finish
 
-- [ ] Full checks pass (tests, lint, build per `spec.md > Run and Verify`)
-- [ ] Secrets and history check clean
-- [ ] README and `.env.example` reflect how to run it
-- [ ] Branch pushed and PR opened: <link>
-- [ ] Code review done: findings triaged, fixes pushed
-- [ ] `product.md` updated: milestone logged under Shipped, learnings moved into Ideas
+- [x] Full checks pass (tests, lint, build per `spec.md > Run and Verify`): typecheck clean, 35 tests pass
+- [x] Secrets and history check clean (no keys in any commit; no .env, cache or run outputs tracked)
+- [x] README and `.env.example` reflect how to run it
+- [x] Branch pushed and PR opened: stacked PRs https://github.com/KshitijBhardwaj18/crowdcraft/pull/1 → /2 → /3 → /4 → /5 (stack #6, base main)
+- [x] Code review done: findings triaged, fixes pushed (to PR #5, the top of the stack)
+- [x] `product.md` updated: milestone logged under Shipped, learnings moved into Ideas
 
 ## Revisions
 - 2026-10-09 (slice 1): Qloo key arrived early, so two Qloo checks ran now. **Verified:** the affinity score is `query.affinity`. **Half-holds:** `filter.results.entities` *omits* items below a segment's cutoff rather than scoring them, and returned scores are compressed (≈0.85–0.99). Plan: a missing item counts as "no engagement" (0) and fit is normalised across segments per reference (already how `normFit` works). Slice 3 confirms this at scale.
@@ -95,4 +102,10 @@ status: approved
 - 2026-10-09 (slice 4, user feedback): the poster report was unclear ("what was the ad? what do I do?") and taste-tribe names weren't actionable for campaign managers. Agreed: segments become **region × age cells** (spec D4b, PRD Key Decisions), a **"What to do" summary step** per run, and an **app-style dashboard** report (PRD Run Report). Slice 4 stays open until the user is happy with the dashboard.
 - 2026-10-09 (slice 4): region × age cells, the "What to do" summary and the dashboard are built. Concert demo: the agent proposes 8 regions, code keeps the 3 most different (e.g. Austin, LA, Chicago) × under 30 / 30-34; ~76 Qloo calls. Citations: brief's own interest tags are excluded from themes and the judge prefers specific items (20 specific vs 9 theme citations).
 - 2026-10-09 (slice 4): open quality issue for slice 6: with a shared interest tag (e.g. "live music"), cities' top lists overlap more (worst cross-region 53%) than age bands within a city (21%). Verdicts still differ sharply. The segmentation metric now reports cross-region and within-region overlap separately.
+- 2026-10-09 (slice 5): regions are chosen from Qloo's heatmap of the ad's references (2 hottest metros + coolest big metro), replacing the AI's guessed city list. Concert demo: strongest Austin (0.99), San Antonio (0.97); contrast New York (0.60). The heatmap needs `filter.location.query`; the locality boundary option errors on the hackathon API, so tiles are rolled up to a static US metro table; `take` is capped at 50 but doesn't limit tiles.
+- 2026-10-09 (slice 5): **wrong reference matches produced confident wrong verdicts** (the agent matched Topo Chico to a dish tag, Barton Springs to a locality, "a record" to a decor tag; every audience flipped to Meh/Skip). Fixed with extract → typed search → pick-or-none; 5 of 6 concert references now match. Also fixed: min-max fit exaggerated 0.84 vs 0.83 into 100 vs 0 (now an absolute scale), and references no audience scores now count as a coverage gap, not negative.
+- 2026-10-09 (slice 5): result after the fixes: CrowdCraft agrees with generic AI where it's obvious (Austin: Love) and disagrees with evidence where Qloo has it (New York: Meh/Like 32–45 vs generic Like/Love 64–92, because Zilker Park has no engagement there).
+- 2026-10-09 (slice 5): free-text briefs: `run --text` / `--text-file`; missing required fields stop with a list (non-interactive) or are asked for (interactive); ethnicity and income land under "Not used" with reasons; non-English and >5,000-character ads are rejected; <10 words warns. `--same-segments <run.json>` compares an edited ad on an earlier run's audiences.
+- 2026-10-09 (slice 5, user): critique alone wasn't actionable, so every run now ends in three deliverables (scope and PRD updated): **Who to target** (Meta/TikTok-ready location, age, Qloo interests, budget split, don't-target with reasons), **What to fix** (line → change → evidence), **Better versions** (rewrite per recommended audience with their taste, references re-resolved, re-judged). Concert demo: Austin under 30: 70 → 86; San Antonio under 30: 60 → 79. Caveats for the eval: the lift is judged by the same Qloo-grounded judge (check against a generic rewrite and the B1 judge); rewrites can name-drop awkwardly ("Hayes Carll-type finds"); some interest picks are generic (Starbucks).
+- 2026-10-09 (slices 4–5 closed): the user is satisfied enough with the dashboard and deliverables to move on, and asked to start the Next.js app next.
 

@@ -21,9 +21,16 @@ One command runs the eval set through the Qloo-grounded engine and the generic b
 - **Run report**: a static HTML file per run, written by the engine. No app.
 - Qloo response data is cached locally or server-side and never committed to the public repo.
 
+## Added 2026-10-09 (user): the three deliverables
+Critique alone wasn't actionable. Every run now ends in three deliverables:
+1. **Who to target**: the audiences to show the ad to, as Meta/TikTok-ready settings (location, ages, interests from Qloo's distinctive taste, budget split), plus who not to target.
+2. **What to fix**: the top changes to the ad, each with a concrete replacement and its evidence.
+3. **Better versions**: the agent rewrites the ad for each top audience using their real taste, re-tests it, and shows the score change.
+The eval then also measures whether Qloo-crafted versions beat the original and generic-AI rewrites.
+
 ## Out
 - The product UI (composer, results screens, adding and editing segments in a UI, examples, landing page, look and feel) and deploying live. Likely M2 (Ideas).
-- Tailored rewrites and the craft loop (Ideas)
+- The open-ended craft loop (rewrite until a goal is met) and Trending (Ideas); one rewrite-and-retest per top audience is now In
 - Map view using Qloo Heatmap (Ideas)
 - Persona chat and avatar (Ideas)
 - Several ads per run (Ideas)

@@ -41,6 +41,9 @@ describe('goNoGo', () => {
   it('is pending without the Qloo arm', () => {
     expect(goNoGo(m({}), false).verdict).toBe('PENDING')
   })
+  it('stays pending when a gate was not measured (e.g. one repetition)', () => {
+    expect(goNoGo(m({ stability: null, sourcing: true, accuracy_bc: true, specificity: true, blind: true }), true).verdict).toBe('PENDING')
+  })
   it('blocks on a failing gate', () => {
     expect(goNoGo(m({ stability: false, sourcing: true, specificity: true, blind: true }), true).verdict).toBe('NOT YET')
   })
@@ -66,5 +69,23 @@ describe('parseCsv', () => {
       ['p01', 'She said "hi", then left\nlater', 'A'],
       ['p02', 'plain', ''],
     ])
+  })
+})
+
+describe('blind CSV round trip', () => {
+  it('reads choices from a file saved with a BOM and guards formula cells', async () => {
+    const { mkdtemp, writeFile, readFile } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const path = await import('node:path')
+    const { exportBlindPairs, readBlindChoices } = await import('../src/eval/blind.ts')
+    const dir = await mkdtemp(path.join(tmpdir(), 'blind-'))
+    const r = (arm: string, text: string) => ({ arm, reaction: [{ sentence: text, sourceIds: [] }] }) as unknown as Review
+    await exportBlindPairs(dir, [{ ad: 'a1', segment: 'S', a: r('crowdcraft', '=HYPERLINK("x")'), b: r('b1_named', 'plain') }], 1)
+    const csv = await readFile(path.join(dir, 'blind-pairs.csv'), 'utf8')
+    expect(csv).toContain(`"'=HYPERLINK(""x"")"`)
+    await writeFile(path.join(dir, 'blind-pairs.csv'), '\uFEFF' + csv.replace(/,""\n$/, ',"tie"\n'))
+    const res = await readBlindChoices(dir)
+    expect(res.judged).toBe(1)
+    expect(res.ties).toBe(1)
   })
 })

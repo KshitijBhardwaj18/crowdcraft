@@ -117,19 +117,33 @@ export const Review = z.object({
 })
 export type Review = z.infer<typeof Review>
 
-// The "What to do" step (spec.md > Summary). Strict-compatible: it is also the LLM's output schema.
+// "What to fix" (spec.md > Deliverables). Strict-compatible: it is also the LLM's output schema.
 export const Summary = z.object({
   bottomLine: z.string(),
-  actions: z.array(
-    z.object({
-      kind: z.enum(['keep', 'fix', 'try', 'spend', 'skip']),
-      text: z.string(),
-      segmentIds: z.array(z.string()),
-      quote: z.string().nullable(),
-    }),
-  ),
+  fixes: z.array(z.object({ line: z.string().nullable(), change: z.string(), why: z.string(), segmentIds: z.array(z.string()) })),
+  keeps: z.array(z.object({ line: z.string().nullable(), why: z.string(), segmentIds: z.array(z.string()) })),
+  skipReasons: z.array(z.object({ segmentId: z.string(), reason: z.string() })),
 })
 export type Summary = z.infer<typeof Summary>
+
+// "Who to target" (spec.md > Deliverables): computed in code from the reviews and Qloo taste.
+export const Targeting = z.object({
+  audiences: z.array(
+    z.object({
+      segmentId: z.string(),
+      location: z.string(),
+      age: z.string(),
+      gender: z.string().nullable(),
+      interests: z.array(z.string()),
+      budgetPct: z.number(),
+      score: z.number(),
+      verdict: Verdict,
+    }),
+  ),
+  skip: z.array(z.object({ segmentId: z.string(), reason: z.string() })),
+  weakFit: z.boolean(),
+})
+export type Targeting = z.infer<typeof Targeting>
 
 export const TraceEvent = z.object({
   t: z.number(),
@@ -160,6 +174,25 @@ export const Run = z.object({
   reviews: z.array(Review),
   verdictLine: z.string(),
   summary: Summary.nullable().default(null),
+  // Where the ad's taste is strongest (Qloo heatmap rolled up to metros); role marks the regions chosen to test.
+  heat: z.array(z.object({ label: z.string(), heat: z.number(), role: z.enum(['hot', 'cool', 'other']) })).nullable().default(null),
+  targeting: Targeting.nullable().default(null),
+  // "Better versions": the ad rewritten for a recommended audience and re-judged on it (review.rankingScore = after).
+  versions: z
+    .array(
+      z.object({
+        segmentId: z.string(),
+        adText: z.string(),
+        usedTaste: z.array(z.string()),
+        before: z.number(),
+        // The two parts of the score, before → after, shown separately: reference fit rises almost by construction when
+        // the rewrite uses the audience's own taste, so the judgement change is the honest signal (PR #5 review).
+        judgementBefore: z.number().nullable().default(null),
+        refFitBefore: z.number().nullable().default(null),
+        review: Review,
+      }),
+    )
+    .default([]),
   trace: z.array(TraceEvent),
   usage: Usage,
   errors: z.array(z.object({ stage: z.string(), message: z.string() })),

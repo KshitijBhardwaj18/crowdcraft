@@ -19,6 +19,12 @@ M1 has no product UI. Its surfaces are a **brief**, three **commands** (run, eva
 | What is it compared against? | Two **baselines** run with the same LLM, the same segments and the same output format, but without Qloo data. |
 | Markets? | US for the main evals; a **coverage probe** measures Canada, UK, Spain and India. |
 
+## Deliverables (added 2026-10-09, user)
+Every run ends in three deliverables, shown first on the dashboard:
+1. **Who to target**: for each recommended audience, the settings to paste into Meta or TikTok Ads Manager: location, age range, gender only if the brief asks, **interests** (the artists, brands, shows and places Qloo says this audience loves more than the others, as names an ad platform accepts) and a **budget split** by fit. Plus **don't target**: audiences where the ad doesn't land, with the reason.
+2. **What to fix**: 3–5 concrete changes. Each names the line, what to replace it with, and the evidence (which audiences it loses, and the Qloo signal behind the replacement).
+3. **Better versions**: for each recommended audience (up to 2), the agent rewrites the ad using that audience's taste, keeping the brand, offer and length, then judges the new version on the same audience. Shown as the full new script with the score change (e.g. 70 → 86).
+
 ## Core Journey
 1. Write a **brief** and an **ad**, either free text or a structured brief file.
 2. Run **`run`**. The engine structures the brief, prints what it inferred and what it couldn't use, and asks for any missing required field.
@@ -146,7 +152,7 @@ The 3 demo examples (a concert tour promo, a sports season-ticket ad, a comedy s
 3. **The full ad script, line by line**: each line shows how many audiences it lands with and loses.
 4. **What to do**: a bottom line plus Keep / Fix / Try / Spend / Skip actions, each tied to the audiences and lines it comes from (one summary step per run, grounded in the reviews and Qloo taste).
 5. **Results by audience**: a table sortable by region, age, score and verdict (Region · Age · Fit · Verdict · Would act · Into), plus a region × age heatmap. Clicking a row opens that audience's reaction with sources, its highlighted ad, and the no-Qloo comparison.
-6. **The ad's references**, then the **agent trace**, collapsed.
+6. **Where the ad's taste is strongest** (Qloo heatmap of its references rolled up to metros, marking the regions tested) and **the ad's references** (fit per audience, age skew), then the **agent trace**, collapsed.
 
 Earlier outline, kept for reference:
 One static file per run, ordered verdict first so it can be shown to someone non-technical:
@@ -175,6 +181,7 @@ One static file per run, ordered verdict first so it can be shown to someone non
 - **Fewer than 4 distinct segments**: keep at least 2, with a note that the target's taste is uniform.
 - **No named references in the ad**: judging uses themes only, and reference fit shows as N/A.
 - **Unresolved reference**: listed as "not in Qloo" and excluded.
+- **A reference Qloo scores for no audience at all**: shown as "no Qloo signal" (a coverage gap) and not counted, never as "everyone dislikes it".
 - **Ad under ~10 words**: a warning, but the run continues. **Over ~5,000 characters**: rejected.
 - **Ad not in English**: rejected with a message.
 - **Qloo or the LLM fails mid-run**: the report and console show the failed step; completed work is kept; re-running resumes from cached Qloo data.
@@ -212,7 +219,7 @@ One static file per run, ordered verdict first so it can be shown to someone non
 ## Out of Scope
 - The product UI (composer, results screens, interactive brief, adding and editing segments in a UI, examples, landing page) and deploying live. Likely M2.
 - Several ads per run, the ad goal as an input, and dimension ratings.
-- Tailored rewrites and the craft loop.
+- The open-ended craft loop (rewrite until a goal is met). One rewrite-and-retest per recommended audience is in.
 - Map view (Heatmap), persona chat and avatar, reel generator.
 - Image and video input.
 - Accounts, history, payments and shareable reports.

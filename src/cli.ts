@@ -1,12 +1,16 @@
 // CrowdCraft CLI (spec.md > Interfaces). `npm run cc -- <command>`.
 import { readFile, writeFile } from 'node:fs/promises'
+import path from 'node:path'
+import { createInterface } from 'node:readline/promises'
 import { tool } from 'ai'
 import { z } from 'zod'
 import { ARMS, Arm, Brief, Fixture, Run, Verdict, type TraceEvent } from './contracts.ts'
 import { renderReport } from './report/render.ts'
 import { quota } from './qloo/client.ts'
 import { judge } from './engine/judge.ts'
-import { assembleRun, buildSegments, judgeAll, summaryFor, writeRun } from './engine/run.ts'
+import { parseBrief, validateAd } from './engine/brief.ts'
+import { assembleRun, buildSegments, deliverablesFor, judgeAll, writeRun } from './engine/run.ts'
+import { resolveReferences, scoreReferences } from './engine/references.ts'
 import YAML from 'yaml'
 import { loadEvalAds, runEval, scoreEval } from './eval/harness.ts'
 import { gradeWithClaude, generateJson, MODEL, runAgent } from './llm.ts'
@@ -34,31 +38,70 @@ async function cmdRun() {
   let brief: Brief
   let segments
   let references: Fixture['references'] = []
+  let heat: Run['heat'] = null
   if (fixturePath) {
     const fx = Fixture.parse(JSON.parse(await readFile(fixturePath, 'utf8')))
     ;({ brief, segments, references } = fx)
   } else {
     const file = args[1]
-    if (!file || file.startsWith('--')) throw new Error('Usage: npm run cc -- run <brief.yaml> | run --fixture <file.json>')
-    const doc = YAML.parse(await readFile(file, 'utf8'))
-    brief = Brief.parse(doc.brief ?? doc) // an eval ad file or a plain brief
-    console.log(`Building segments for: ${brief.target.text} (${brief.market.country})`)
-    ;({ segments } = await buildSegments(brief, trace, args.includes('--no-cache')))
+    const text = flag('text') ?? (flag('text-file') ? await readFile(flag('text-file')!, 'utf8') : null)
+    if (text) brief = await briefFromText(text, trace)
+    else {
+      if (!file || file.startsWith('--')) throw new Error('Usage: npm run cc -- run <brief.yaml> | run --text "<brief and ad>" | run --text-file <file> | run --fixture <file.json>')
+      const doc = YAML.parse(await readFile(file, 'utf8'))
+      brief = Brief.parse(doc.brief ?? doc) // an eval ad file or a plain brief
+      const check = validateAd(brief.adText)
+      if (check.error) throw new Error(check.error)
+      for (const w of check.warnings) console.log(`! ${w}`)
+    }
+    const same = flag('same-segments')
+    if (same) {
+      // Compare an edited ad on the audiences of an earlier run (prd.md > Core Journey, re-runs).
+      const prev = Run.parse(JSON.parse(await readFile(same, 'utf8')))
+      segments = prev.segments
+      heat = null // the earlier run's heatmap describes the earlier ad, not this one
+      references = await scoreReferences(await resolveReferences(brief, { trace }), segments, { trace })
+      console.log(`Reusing ${segments.length} audiences from ${same}`)
+    } else {
+      console.log(`Building audiences for: ${brief.target.text} (${brief.market.country})`)
+      ;({ segments, references, heat } = await buildSegments(brief, trace, args.includes('--no-cache')))
+    }
   }
   console.log(`Judging ${segments.length} segments × ${arms.length} arms with ${MODEL}…`)
   const reviews = await judgeAll(brief, segments, references, arms, trace, errors)
-  const summary = await summaryFor(brief, segments, reviews, trace, errors)
-  const run = assembleRun(brief, segments, references, reviews, trace, errors, summary)
+  const { targeting, summary, versions } = await deliverablesFor(brief, segments, reviews, trace, errors)
+  const run = assembleRun(brief, segments, references, reviews, trace, errors, summary, heat, targeting, versions)
   const report = await writeRun(run)
   const q = quota.monthRemaining == null ? '' : ` · Qloo quota left ${quota.monthRemaining}`
   console.log(`\n${run.verdictLine}\n$${run.usage.costUsd.toFixed(4)} · ${run.usage.qlooCalls} Qloo calls${q} · ${(run.usage.ms / 1000).toFixed(1)}s\nReport: ${report}`)
+}
+
+// Free-text brief → structured brief; asks for missing required fields when interactive, otherwise stops and lists them.
+async function briefFromText(text: string, trace: Trace): Promise<Brief> {
+  let input = text
+  for (let round = 0; round < 3; round++) {
+    const r = await parseBrief(input, trace)
+    if (r.error) throw new Error(r.error)
+    for (const w of r.warnings) console.log(`! ${w}`)
+    if (r.brief) {
+      const b = r.brief
+      console.log(`Brief: ${b.brandLine ?? 'untitled'} · ${b.channel} · ${b.adType} · ${[b.market.city, b.market.region, b.market.country].filter(Boolean).join(', ')} · for ${b.target.text}`)
+      for (const u of b.unused) console.log(`  Not used: ${u.phrase} (${u.reason})`)
+      return b
+    }
+    if (!process.stdin.isTTY) throw new Error(`The brief is missing: ${r.missing.join('; ')}. Add it and run again.`)
+    const rl = createInterface({ input: process.stdin, output: process.stdout })
+    for (const m of r.missing) input += `\n${m}: ${await rl.question(`The brief doesn't say ${m}. What is it? `)}`
+    rl.close()
+  }
+  throw new Error('The brief is still incomplete after three tries.')
 }
 
 async function cmdReport() {
   const file = args[1]
   if (!file) throw new Error('Usage: npm run cc -- report <runs/<id>/run.json>')
   const run = Run.parse(JSON.parse(await readFile(file, 'utf8')))
-  const out = file.replace(/run\.json$/, 'report.html')
+  const out = path.join(path.dirname(file), 'report.html')
   await writeFile(out, renderReport(run))
   console.log(`Report: ${out}`)
 }
@@ -74,6 +117,8 @@ async function cmdEval() {
   const arms = (flag('arms')?.split(',') ?? ARMS).map((a) => Arm.parse(a))
   const ads = await loadEvalAds(flag('ads')?.split(',') ?? null)
   const reps = Number(flag('reps') ?? 2)
+  if (!Number.isInteger(reps) || reps < 1) throw new Error('--reps must be a whole number of at least 1 (2 measures stability).')
+  if (reps === 1) console.log('! --reps 1: stability is not measured, so the go/no-go stays pending.')
   const outDir = `eval-results/${new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15)}`
   console.log(`Eval: ${ads.length} ads × ${arms.length} arms × ${reps} reps with ${MODEL} → ${outDir}`)
   const r = await runEval({ ads, arms, reps, outDir, log: console.log })
@@ -203,7 +248,7 @@ async function cmdSelfcheck() {
 const commands: Record<string, () => Promise<void>> = { run: cmdRun, report: cmdReport, eval: cmdEval, probe: cmdProbe, selfcheck: cmdSelfcheck }
 const cmd = commands[args[0]]
 if (!cmd) {
-  console.log('Commands: run <brief.yaml> [--no-cache] | run --fixture <file> [--arms a,b] | report <run.json> | eval [--ads ids] [--arms a,b] [--reps n] | eval score <dir> | probe | selfcheck [--qloo]')
+  console.log('Commands: run <brief.yaml> | run --text "<brief and ad>" | run --text-file <file> [--no-cache] [--same-segments <run.json>] | run --fixture <file> [--arms a,b] | report <run.json> | eval [--ads ids] [--arms a,b] [--reps n] | eval score <dir> | probe | selfcheck [--qloo]')
   process.exitCode = 1
 } else {
   cmd().catch((e) => {
