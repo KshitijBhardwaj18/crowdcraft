@@ -81,7 +81,9 @@ const tagItem = (t: any): EvidenceItem => ({
 })
 
 export async function topEntities(domain: Domain, s: QlooSignals, take: number, ctx: Ctx): Promise<EvidenceItem[]> {
-  const d = await qlooGet('/v2/insights', { 'filter.type': `urn:entity:${domain}`, ...signalParams(s), take }, ctx, `Top ${domain}s`)
+  // The location signal only influences ranking; places must also be filtered to the segment's locality.
+  const within = domain === 'place' ? { 'filter.location.query': s.locationId ? null : s.locationQuery, 'filter.location': s.locationId } : {}
+  const d = await qlooGet('/v2/insights', { 'filter.type': `urn:entity:${domain}`, ...signalParams(s), ...within, take }, ctx, `Top ${domain}s`)
   return (d.results?.entities ?? []).map(entityItem)
 }
 

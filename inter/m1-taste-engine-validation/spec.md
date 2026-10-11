@@ -65,6 +65,14 @@ Everything is new: the engine, the LLM layer, the Qloo client and cache, the rep
 - Chosen: **affinity matrix** (user accepted the recommendation). Option A (top-item overlap only) can't express "loves this more than the others"; option C (pairwise Compare) is expensive and returns tags, not a distance.
 - Detail: an affinity matrix (each candidate scored via `filter.results.entities` against the pooled top items of all candidates) for selection and distinctive items; Jaccard overlap of top items reported as the distinctness metric; Analysis Compare on the kept segments, each against the rest, for "what sets them apart" themes. Greedy selection: start with the richest candidate, add the most different, stop at 6 or when too similar (at least 4 where possible, never fewer than 2). Falls back to overlap-based selection if Qloo doesn't score low-ranked items.
 
+### D4b: Segments are region × age cells — decided (2026-10-09, user)
+- Door: one-way (changes what a segment is)
+- Context: the user found taste-tribe segments ("Austin indie-folk fans") unclear for campaign managers, who buy region and age.
+- Chosen: the candidates agent proposes 6–8 taste-diverse regions in the market (verified localities). Code fingerprints each region (artist and brand, at the target's full age range) and keeps the 2–3 most different by top-list overlap (greedy max-min on 1 − Jaccard). Cells = kept regions × 2 age bands split from the target's buckets (a single-city market splits into up to 4 bands). The brief's named interest applies to every cell. The affinity matrix (D4) still runs across the cells, for distinctive items.
+- Why: results map straight into ad-platform targeting; Qloo taste stays the evidence for every insight.
+- Tradeoff accepted: cells in the same region share more taste than taste tribes did; age differences within a region are smaller.
+- Revisit if: cells come back too similar to discriminate (the eval's distinctness metric).
+
 ### D5: Data contracts — decided
 - Door: one-way
 - Context: the report renders these shapes, the evals compare them, and M2's UI will consume them. Renaming fields later touches everything.
@@ -134,6 +142,9 @@ The agent that extracts and resolves references, then deterministic fit per segm
 ### Judge (new) — `src/engine/judge.ts`
 Prompts per arm, the `Review` call, B2's two-step invented persona, citation validation, quote location, and the ranking score. Serves PRD **Review (per segment)** and **Baselines**.
 
+### Summary (new) — `src/engine/summary.ts`
+One structured call after judging: the bottom line and Keep / Fix / Try / Spend / Skip actions from the CrowdCraft reviews, the line-by-line tally and each cell's Qloo taste. Segment IDs are validated and quotes must be found in the ad. Serves PRD **Run Report (HTML)** item 4.
+
 ### Run orchestrator and trace (new) — `src/engine/run.ts`
 Runs the stages, records trace events and usage, keeps partial results on failure, and writes `run.json`. Serves PRD **Core Journey** and **States and Edge Cases**.
 
@@ -171,6 +182,7 @@ EvidenceItem { qlooId: string; name: string; type: string; affinity: number|null
 Segment {
   id: string                      // slug, stable within a run
   name: string; definedBy: string[]; signals: QlooSignals
+  region: string|null; ageBand: string|null      // added 2026-10-09: "Austin, TX", "25-29"
   confidence: 'normal'|'broadened'|'thin'; confidenceNote: string|null
   fingerprint: (EvidenceItem & { distinctiveness: number })[]   // distinctive items, all domains
   themes: EvidenceItem[]          // urn:tag results
@@ -194,6 +206,11 @@ Review {
   inventedPersona: { bio: string; favourites: { name: string; type: string }[] } | null   // B2 only
 }
 
+Summary {
+  bottomLine: string
+  actions: { kind: 'keep'|'fix'|'try'|'spend'|'skip'; text: string; segmentIds: string[]; quote: string|null }[]
+}
+
 TraceEvent {
   t: number                       // ms since run start
   stage: 'brief'|'signals'|'candidates'|'fingerprints'|'select'|'references'|'fit'|'judge'|'report'
@@ -206,6 +223,7 @@ Run {
   schemaVersion: 1; id: string; createdAt: string
   brief: Brief; segments: Segment[]; references: Reference[]; reviews: Review[]
   verdictLine: string
+  summary: Summary|null           // added 2026-10-09: the "What to do" step
   trace: TraceEvent[]
   usage: { qlooCalls: number; llmCalls: number; tokensIn: number; tokensOut: number; costUsd: number; ms: number }
   errors: { stage: string; message: string }[]
@@ -233,6 +251,7 @@ Evidence for citation validation (CrowdCraft and ablation arms): the segment's `
 | `npm run cc -- eval score <dir>` | That directory with `choice` filled in `blind-pairs.csv` | An updated scorecard |
 | `npm run cc -- probe` | `probe/segments.yaml` | `probe-results/<timestamp>/coverage.json`, `coverage.html` |
 | `npm run cc -- run --fixture <file.json>` (dev) | A hand-made `{ brief, segments, references }` file; skips every Qloo stage | Same as `run` |
+| `npm run cc -- report <runs/<id>/run.json>` (dev) | A finished run | Re-renders `report.html` from `run.json` (no model or Qloo calls) |
 | `npm run cc -- selfcheck [--qloo]` (dev) | Nothing | Checks Muse structured output, the agent tool loop, judge drift and the `claude -p` grader; with `--qloo`, the open Qloo assumptions. Prints ✓/✗ with evidence |
 
 ### LLM layer (`src/llm.ts`)

@@ -19,6 +19,7 @@ export function specToSegment(s: EvalSegmentSpec): Segment {
   return {
     id: s.id, name: s.name, definedBy: definedBy.filter((x): x is string => !!x),
     signals: { locationQuery: s.locationQuery, locationId: null, ageBuckets: s.ageBuckets, gender: s.gender, audienceIds: [], tagIds: [], entityIds: [] },
+    region: s.locationQuery, ageBand: s.ageBuckets?.map((a) => AGE_LABEL[a]).join(', ') ?? null,
     confidence: 'normal', confidenceNote: null, fingerprint: [], themes: [], setsApart: [],
   }
 }

@@ -11,9 +11,9 @@ M1 has no product UI. Its surfaces are a **brief**, three **commands** (run, eva
 |---|---|
 | What goes in? | The **ad** (copy or script) plus a **brief** in free text: where it runs, who it's for, the channel, and the brand and product. The LLM structures the brief and asks for anything required that's missing. |
 | What decides the segments? | **The brief.** Segments are sub-crowds **inside the target and market**. "Misses" means parts of the user's own audience the ad isn't reaching. |
-| What do segments differ by? | **Taste first** (Qloo audiences, tags, "fans of"), then **place** within the market, then **age** within the target range. **Gender** only if the brief asks for it. |
+| What do segments differ by? | **Region × age group**: the units a campaign manager can actually buy in ad platforms (e.g. "Austin, TX · 25–29"). The agent picks the 2–3 regions in the market whose Qloo taste differs most, crossed with 2 age bands from the target. An interest is added to every cell only if the brief names one; gender only if the brief asks. **Qloo taste is the explanation** of each cell ("Into: …"), not its name. (Changed 2026-10-09 after user feedback: taste-tribe names like "Austin indie-folk fans" weren't actionable for marketers.) |
 | Sensitive attributes? | Ethnicity, race, religion and sexuality are **never inferred and never used as a split**. A community is allowed only when the brief names it explicitly *and* Qloo has a matching community audience; it's labelled as such. Culture comes through taste ("San Antonio fans of Bad Bunny and Selena"), not identity labels. |
-| How many segments? | The agent keeps the **4–6 most distinct** of 8–10 candidates (at least 2 when taste is uniform). |
+| How many segments? | **4–6 cells**: 2–3 regions × 2 age bands (a single-city market splits into more age bands instead). |
 | One ad or many? | One ad per run. |
 | What does a segment say? | A **gut verdict** (Love / Like / Meh / Skip, plus whether they'd act), a **reaction in their own voice**, and **line highlights** on the ad. A 0–100 **ranking score** is used only for ordering. Every claim is sourced to Qloo data. |
 | What is it compared against? | Two **baselines** run with the same LLM, the same segments and the same output format, but without Qloo data. |
@@ -61,7 +61,8 @@ Each step, the Qloo capability it uses, and what it produces. Exact endpoints an
 The agent makes and logs decisions: broadening a thin segment (city → state, dropping an age band), retrying an unresolved reference as a tag, and treating an empty Qloo result as thin data (Qloo silently ignores invalid parameters).
 
 ### Segment
-- **Name**: specific and built from its signals, e.g. "Austin indie-music fans, 25–34". Never a stereotype label.
+- **Name**: the buyable cell, "Region · Age", e.g. "Austin, TX · 25–29" (plus the interest if the brief names one). Never a stereotype label.
+- **Region** and **age band** as separate fields, so results can be sorted and grouped by them.
 - **Defined by**: the Qloo signals.
 - **Fingerprint**: its top distinctive items across domains, plus themes. Every item is a real Qloo entity or tag; nothing is LLM-written.
 - **Data confidence**: Normal, or Broadened / Thin with the reason.
@@ -139,6 +140,15 @@ The 3 demo examples (a concert tour promo, a sports season-ticket ad, a comedy s
 - **NO-GO**: CrowdCraft doesn't beat the baselines on specificity or preference. Rethink how Qloo is used before M2.
 
 ### Run Report (HTML)
+**Changed 2026-10-09 after user feedback** (the poster layout hid the ad and gave no actions). The report is an app-style dashboard:
+1. **Header**: campaign (brand line), channel, format, market, target, date; "Directional, not guaranteed".
+2. **KPI row**: overall fit (average score and grade), best audience, weakest audience, how many audiences respond positively.
+3. **The full ad script, line by line**: each line shows how many audiences it lands with and loses.
+4. **What to do**: a bottom line plus Keep / Fix / Try / Spend / Skip actions, each tied to the audiences and lines it comes from (one summary step per run, grounded in the reviews and Qloo taste).
+5. **Results by audience**: a table sortable by region, age, score and verdict (Region · Age · Fit · Verdict · Would act · Into), plus a region × age heatmap. Clicking a row opens that audience's reaction with sources, its highlighted ad, and the no-Qloo comparison.
+6. **The ad's references**, then the **agent trace**, collapsed.
+
+Earlier outline, kept for reference:
 One static file per run, ordered verdict first so it can be shown to someone non-technical:
 1. **Verdict line**, e.g. "Love from Austin indie fans and NYC streetwear; Skip from suburban sports families." Below it, the segment verdicts ranked, and "Directional, not guaranteed."
 2. **Brief**: as structured, plus anything that wasn't used and why.

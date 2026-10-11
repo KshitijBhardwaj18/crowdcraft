@@ -25,7 +25,10 @@ brief:
     city: null
   target:
     text: music fans 21-34 in US cities
-    ageBuckets: null
+    ageBuckets:
+      - 24_and_younger
+      - 25_to_29
+      - 30_to_34
     gender: null
     interests: []
     communities: []

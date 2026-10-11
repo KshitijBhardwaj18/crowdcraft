@@ -4,8 +4,11 @@ import path from 'node:path'
 import YAML from 'yaml'
 import type { AgeBucket, QlooSignals } from '../contracts.ts'
 import { searchTags, topEntities, type Domain } from '../qloo/client.ts'
+import { jaccard } from '../engine/select.ts'
 import { CSS, esc } from '../report/render.ts'
 import { Trace } from '../trace.ts'
+
+export { jaccard }
 
 type Config = { markets: { id: string; name: string; city: string }[]; tastes: { id: string; tagQuery: string }[]; ages: AgeBucket[]; domains: Domain[] }
 type Cell = { taste: string; age: AgeBucket; domain: Domain; ids: string[]; names: string[] }
@@ -21,13 +24,6 @@ export type MarketResult = {
   sample: { segment: string; artists: string[]; brands: string[] }
 }
 
-export const jaccard = (a: string[], b: string[]) => {
-  const A = new Set(a)
-  const B = new Set(b)
-  const inter = [...A].filter((x) => B.has(x)).length
-  const union = new Set([...A, ...B]).size
-  return union ? inter / union : 0
-}
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0)
 
 export function verdictFor(m: Pick<MarketResult, 'fillRate' | 'distinctness' | 'localSpecificity'>): MarketResult['verdict'] {
